@@ -1,4 +1,5 @@
-import { db, auth } from "@/lib/firebase";
+import { db, auth } from "../lib/firebase"; // relative path
+
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { useState } from "react";
 

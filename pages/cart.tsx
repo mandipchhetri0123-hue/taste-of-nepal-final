@@ -1,3 +1,4 @@
+// pages/cart.tsx
 export default function Cart() {
   return (
     <div className="p-6">
@@ -6,4 +7,3 @@ export default function Cart() {
     </div>
   );
 }
- 
