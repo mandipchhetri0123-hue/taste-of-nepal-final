@@ -1,23 +1,23 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import './globals.css';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
+import { CartProvider } from '@/context/CartContext';
 
-export const metadata: Metadata = {
-  title: "Taste of Nepal",
-  description: "Discover authentic Nepali restaurants and order your favorite dishes online.",
-  manifest: "/manifest.json",
-  themeColor: "#d32f2f",
-  icons: {
-    icon: [
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
-    ],
-  },
+export const metadata = {
+  title: 'Taste of Nepal',
+  description: 'Authentic Nepali catering and online ordering',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 font-sans">{children}</body>
+      <body>
+        <CartProvider>
+          <Navbar />
+          <main className="container mx-auto py-8 px-4">{children}</main>
+          <Footer />
+        </CartProvider>
+      </body>
     </html>
   );
 }
