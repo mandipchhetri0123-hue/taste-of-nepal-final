@@ -1,126 +1,87 @@
 'use client';
-import { useState } from 'react';
 import { useCart } from '@/context/CartContext';
-import { getAuth } from 'firebase/auth';
-import { app, db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 export default function CheckoutPage() {
   const { cart, clearCart } = useCart();
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [address, setAddress] = useState('');
-  const [loading, setLoading] = useState(false);
-  const auth = getAuth(app);
   const router = useRouter();
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleCheckout = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const user = auth.currentUser;
-    if (!user) {
-      alert('Please login before placing your order.');
-      router.push('/auth/login');
-      return;
-    }
+  if (cart.length === 0) {
+    return (
+      <div className="text-center py-20">
+        <h1 className="text-3xl font-bold mb-4">Your Cart is Empty</h1>
+        <button
+          className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700"
+          onClick={() => router.push('/menu')}
+        >
+          Go Back to Menu
+        </button>
+      </div>
+    );
+  }
 
-    if (cart.length === 0) {
-      alert('Your cart is empty.');
-      return;
-    }
+  const total = cart.reduce((acc, item) => acc + item.price * (item.guests ?? 0), 0);
 
-    setLoading(true);
-    try {
-      await addDoc(collection(db, 'orders'), {
-        userEmail: user.email,
-        name,
-        phone,
-        address,
-        cartItems: cart,
-        status: 'pending',
-        createdAt: serverTimestamp(),
-      });
-
+  const handlePlaceOrder = () => {
+    setSubmitting(true);
+    setTimeout(() => {
       clearCart();
-      alert('✅ Order placed successfully!');
+      alert('✅ Your order has been placed successfully!');
       router.push('/');
-    } catch (error) {
-      console.error('Error placing order:', error);
-      alert('❌ Failed to place order. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+    }, 1500);
   };
 
   return (
-    <div className="bg-gray-50 min-h-screen py-12">
-      <div className="max-w-3xl mx-auto bg-white shadow-lg p-8 rounded-lg">
-        <h1 className="text-3xl font-bold text-center mb-6 text-red-700">Checkout</h1>
+    <div className="max-w-4xl mx-auto py-12 px-4">
+      <h1 className="text-4xl font-bold text-center mb-6">Checkout</h1>
+      <p className="text-center text-gray-600 mb-10">
+        Review your order details below before confirming.
+      </p>
 
-        {cart.length === 0 ? (
-          <p className="text-center text-gray-600">Your cart is empty.</p>
-        ) : (
-          <>
-            <h2 className="text-xl font-semibold mb-4">Your Order Summary</h2>
-            <ul className="mb-6 border rounded p-4 bg-gray-50">
-              {cart.map((item, index) => (
-                <li key={index} className="border-b py-2">
-                  <strong>{item.name}</strong> – {item.price}
-                  {item.selections && (
-                    <ul className="ml-5 text-sm text-gray-600 list-disc">
-                      {item.selections.entrees?.length > 0 && (
-                        <li>Entrees: {item.selections.entrees.join(', ')}</li>
-                      )}
-                      {item.selections.mains?.length > 0 && (
-                        <li>Mains: {item.selections.mains.join(', ')}</li>
-                      )}
-                      {item.selections.desserts?.length > 0 && (
-                        <li>Desserts: {item.selections.desserts.join(', ')}</li>
-                      )}
-                      {item.selections.specialRequest && (
-                        <li>Note: {item.selections.specialRequest}</li>
-                      )}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
+      <div className="bg-white shadow-md rounded-lg p-8">
+        {cart.map((item) => (
+          <div key={item.id} className="border-b pb-4 mb-4">
+            <h2 className="text-2xl font-semibold mb-1">{item.name}</h2>
+            <p className="text-gray-700">
+              💰 ${item.price} × 👥 {item.guests ?? 0} guests
+            </p>
+            <p className="text-gray-700 font-semibold mt-1">
+              Total: ${(item.price * (item.guests ?? 0)).toFixed(2)}
+            </p>
 
-            <form onSubmit={handleCheckout} className="space-y-4">
-              <input
-                type="text"
-                placeholder="Full Name"
-                className="w-full p-3 border rounded"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-              <input
-                type="tel"
-                placeholder="Phone Number"
-                className="w-full p-3 border rounded"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
-              <textarea
-                placeholder="Delivery Address"
-                className="w-full p-3 border rounded"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                required
-              />
+            <div className="mt-2 text-sm text-gray-700">
+              <p><strong>Entrees:</strong> {item.selections.entrees.join(', ')}</p>
+              <p><strong>Mains:</strong> {item.selections.mains.join(', ')}</p>
+              <p><strong>Desserts:</strong> {item.selections.desserts.join(', ')}</p>
+              {item.selections.specialRequest && (
+                <p><strong>Note:</strong> {item.selections.specialRequest}</p>
+              )}
+            </div>
+          </div>
+        ))}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 font-semibold"
-              >
-                {loading ? 'Placing Order...' : 'Place Order'}
-              </button>
-            </form>
-          </>
-        )}
+        <div className="text-right mt-6">
+          <p className="text-2xl font-bold text-gray-800 mb-6">
+            Grand Total: ${total.toFixed(2)}
+          </p>
+
+          <button
+            onClick={handlePlaceOrder}
+            disabled={submitting}
+            className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-70"
+          >
+            {submitting ? 'Placing Order...' : 'Confirm & Place Order'}
+          </button>
+        </div>
+
+        <button
+          onClick={() => router.push('/cart')}
+          className="text-blue-600 underline mt-6 block text-center"
+        >
+          ← Back to Cart
+        </button>
       </div>
     </div>
   );
