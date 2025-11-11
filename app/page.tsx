@@ -28,7 +28,7 @@ export default function HomePage() {
         <div className="grid md:grid-cols-3 gap-8">
           {/* 1 */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
-            <img src="https://placehold.co/600x400/FEE2E2/DC2626?text=Steamed+Momo" alt="Nepalese Momo" className="w-full h-56 object-cover" />
+            <img src="https://www.thespruceeats.com/thmb/T_R22QniykdQ9aPCLKIk-O22Gh4=/750x0/filters:no_upscale():max_bytes(150000):strip_icc():format(webp)/steamed-momos-wontons-1957616-hero-01-1c59e22bad0347daa8f0dfe12894bc3c.jpg" alt="Nepalese Momo" className="w-full h-56 object-cover" />
             <div className="p-6">
               <h3 className="text-2xl font-bold mb-2 text-nepal-red">Steamed Momo</h3>
               <p className="text-gray-600 mb-4">Delicious dumplings filled with seasoned mince, served with a tangy tomato chutney.</p>
@@ -37,7 +37,7 @@ export default function HomePage() {
           </div>
           {/* 2 */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
-            <img src="https://placehold.co/600x400/E0F2FE/2563EB?text=Chicken+Choila" alt="Chicken Choila" className="w-full h-56 object-cover" />
+            <img src="https://junifoods.com/wp-content/uploads/2023/04/easy-chicken-choila-1024x693.png" alt="Chicken Choila" className="w-full h-56 object-cover" />
             <div className="p-6">
               <h3 className="text-2xl font-bold mb-2 text-nepal-red">Chicken Choila</h3>
               <p className="text-gray-600 mb-4">Grilled boneless chicken with spices.</p>
@@ -46,7 +46,7 @@ export default function HomePage() {
           </div>
           {/* 3 */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
-            <img src="https://placehold.co/600x400/EDE9FE/7C3AED?text=Pakoda" alt="Pakoda" className="w-full h-56 object-cover" />
+            <img src="https://www.indianveggiedelight.com/wp-content/uploads/2022/04/air-fryer-onion-pakoda-2.jpg" alt="Pakoda" className="w-full h-56 object-cover" />
             <div className="p-6">
               <h3 className="text-2xl font-bold mb-2 text-nepal-red">Pakoda (Veg)</h3>
               <p className="text-gray-600 mb-4">Deep-fried vegetable fritter.</p>
