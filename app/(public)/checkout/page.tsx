@@ -1,87 +1,103 @@
 'use client';
-import { useCart } from '@/context/CartContext';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function CheckoutPage() {
-  const { cart, clearCart } = useCart();
   const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    payment: '',
+  });
+  const [loading, setLoading] = useState(false);
 
-  if (cart.length === 0) {
-    return (
-      <div className="text-center py-20">
-        <h1 className="text-3xl font-bold mb-4">Your Cart is Empty</h1>
-        <button
-          className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700"
-          onClick={() => router.push('/menu')}
-        >
-          Go Back to Menu
-        </button>
-      </div>
-    );
-  }
+  const handleChange = (e: any) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
-  const total = cart.reduce((acc, item) => acc + item.price * (item.guests ?? 0), 0);
+  const handleSubmit = async (e: any) => {
+    e.preventDefault();
+    if (!form.name || !form.phone || !form.address || !form.payment) {
+      alert('⚠️ Please fill in all required fields.');
+      return;
+    }
 
-  const handlePlaceOrder = () => {
-    setSubmitting(true);
+    setLoading(true);
+
+    // Simulate payment processing delay
     setTimeout(() => {
-      clearCart();
-      alert('✅ Your order has been placed successfully!');
-      router.push('/');
-    }, 1500);
+      alert('✅ Payment simulated successfully!\nThank you for your order.');
+      router.push('/'); // redirect to homepage
+    }, 2000);
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-12 px-4">
-      <h1 className="text-4xl font-bold text-center mb-6">Checkout</h1>
-      <p className="text-center text-gray-600 mb-10">
-        Review your order details below before confirming.
-      </p>
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+      <div className="bg-white shadow-lg rounded-lg p-8 w-full max-w-md">
+        <h1 className="text-3xl font-bold text-center mb-6">Checkout</h1>
 
-      <div className="bg-white shadow-md rounded-lg p-8">
-        {cart.map((item) => (
-          <div key={item.id} className="border-b pb-4 mb-4">
-            <h2 className="text-2xl font-semibold mb-1">{item.name}</h2>
-            <p className="text-gray-700">
-              💰 ${item.price} × 👥 {item.guests ?? 0} guests
-            </p>
-            <p className="text-gray-700 font-semibold mt-1">
-              Total: ${(item.price * (item.guests ?? 0)).toFixed(2)}
-            </p>
-
-            <div className="mt-2 text-sm text-gray-700">
-              <p><strong>Entrees:</strong> {item.selections.entrees.join(', ')}</p>
-              <p><strong>Mains:</strong> {item.selections.mains.join(', ')}</p>
-              <p><strong>Desserts:</strong> {item.selections.desserts.join(', ')}</p>
-              {item.selections.specialRequest && (
-                <p><strong>Note:</strong> {item.selections.specialRequest}</p>
-              )}
-            </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Full Name</label>
+            <input
+              name="name"
+              value={form.name}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+              placeholder="Enter your full name"
+              required
+            />
           </div>
-        ))}
 
-        <div className="text-right mt-6">
-          <p className="text-2xl font-bold text-gray-800 mb-6">
-            Grand Total: ${total.toFixed(2)}
-          </p>
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Phone Number</label>
+            <input
+              name="phone"
+              type="tel"
+              value={form.phone}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+              placeholder="e.g. 0478 123 456"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Delivery Address</label>
+            <textarea
+              name="address"
+              value={form.address}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+              placeholder="Enter delivery address"
+              required
+            ></textarea>
+          </div>
+
+          <div>
+            <label className="block text-gray-700 font-semibold mb-1">Payment Method</label>
+            <select
+              name="payment"
+              value={form.payment}
+              onChange={handleChange}
+              className="w-full border p-2 rounded"
+              required
+            >
+              <option value="">Select Payment Type...</option>
+              <option value="Cash on Delivery">Cash on Delivery</option>
+              <option value="Card (Simulated)">Card (Simulated)</option>
+            </select>
+          </div>
 
           <button
-            onClick={handlePlaceOrder}
-            disabled={submitting}
-            className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-70"
+            type="submit"
+            disabled={loading}
+            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700"
           >
-            {submitting ? 'Placing Order...' : 'Confirm & Place Order'}
+            {loading ? 'Processing...' : 'Proceed to Payment'}
           </button>
-        </div>
-
-        <button
-          onClick={() => router.push('/cart')}
-          className="text-blue-600 underline mt-6 block text-center"
-        >
-          ← Back to Cart
-        </button>
+        </form>
       </div>
     </div>
   );
