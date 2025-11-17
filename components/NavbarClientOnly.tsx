@@ -1,13 +1,19 @@
 'use client';
+
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
-import { app } from "@/firebase/config";
+import { app } from "@/lib/firebase"; // <-- Ensure this path is correct
 
 export default function NavbarClientOnly() {
   const [firstName, setFirstName] = useState<string | null>(null);
+
+  // Prevent hydration mismatch (run ONLY on client)
+  if (typeof window === "undefined") {
+    return null;  // <-- This is valid HERE inside component
+  }
 
   useEffect(() => {
     const auth = getAuth(app);

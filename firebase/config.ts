@@ -1,5 +1,5 @@
-// frontend/firebase/config.ts
-import { initializeApp, getApps } from "firebase/app";
+// firebase/config.ts
+import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -10,5 +10,12 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// ✅ avoid "Firebase App named '[DEFAULT]' already exists" in Next.js
-export const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+// ✅ Avoid duplicate app error in Next.js
+let app: FirebaseApp;
+if (!getApps().length) {
+  app = initializeApp(firebaseConfig);
+} else {
+  app = getApps()[0]!;
+}
+
+export { app };

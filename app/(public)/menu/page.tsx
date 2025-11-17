@@ -1,94 +1,96 @@
 'use client';
-import { useState } from 'react';
+
+import { useEffect, useState } from 'react';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { app } from '@/firebase/config';
 import { useCart } from '@/context/CartContext';
 
 export default function MenuPage() {
+  const db = getFirestore(app);
   const { addToCart } = useCart();
+
+  const [packages, setPackages] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'standard' | 'premium' | 'deluxe'>('standard');
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
+
   const [selectedItems, setSelectedItems] = useState({
     entrees: [] as string[],
     mains: [] as string[],
     desserts: [] as string[],
     specialRequest: ''
   });
-  const [guests, setGuests] = useState<number>(15); // default to 15 guests
 
-  const PACKAGE_CONFIG: any = {
-    standard: {
-      name: 'Standard Menu Package',
-      price: 25,
-      minGuests: 15,
-      limits: { entrees: 2, mains: 2, desserts: 1 },
-      options: {
-        entrees: ['Pakoda', 'Aloo Dum', 'Bhatmas Sadheko', 'Peanut Sadheko', 'Prawn Crackers', 'Chiura'],
-        mains: ['Dal', 'Rajma', 'Chicken Curry', 'Paneer Kerau', 'Aloo Kauli'],
-        desserts: ['Lalmohan']
-      }
-    },
-    premium: {
-      name: 'Premium Menu Package',
-      price: 30,
-      minGuests: 15,
-      limits: { entrees: 3, mains: 3, desserts: 1 },
-      options: {
-        entrees: ['Samosa Chat', 'Pakoda', 'Aloo Dum', 'Chicken Choila', 'Bhatmas Sadheko', 'Peanut Sadheko', 'Furandana'],
-        mains: ['Dal', 'Rajma', 'Chicken Curry', 'Goat Curry (+$2 pp)', 'Paneer Kerau', 'Aloo Kauli'],
-        desserts: ['Dudhbari', 'Gajarko Haluwa', 'Lalmohan']
-      }
-    },
-    deluxe: {
-      name: 'Deluxe Menu Package',
-      price: 35,
-      minGuests: 25,
-      limits: { entrees: 4, mains: 3, desserts: 2 },
-      options: {
-        entrees: ['Fried Chicken', 'Samosa Chat', 'Pakoda', 'Aloo Dum', 'Chicken Choila', 'Bhatmas Sadheko', 'Peanut Sadheko'],
-        mains: ['Dal', 'Rajma', 'Chicken Curry', 'Goat Curry', 'Paneer Kerau', 'Aloo Kauli'],
-        desserts: ['Dudhbari', 'Gajarko Haluwa', 'Lalmohan']
-      }
+  const [guests, setGuests] = useState<number>(15);
+
+  // Load Firestore Data
+  useEffect(() => {
+    async function load() {
+      const std = await getDoc(doc(db, "cateringPackages", "standard"));
+      const prem = await getDoc(doc(db, "cateringPackages", "premium"));
+      const del = await getDoc(doc(db, "cateringPackages", "deluxe"));
+
+      setPackages({
+        standard: std.data(),
+        premium: prem.data(),
+        deluxe: del.data()
+      });
     }
-  };
+    load();
+  }, []);
 
-  // Handle tab change
-  const handleTabChange = (tab: 'standard' | 'premium' | 'deluxe') => {
-    setActiveTab(tab);
-    setSelectedPackage(null);
-  };
+  if (!packages) {
+    return <div className="p-10 text-center text-xl">Loading Catering Menu…</div>;
+  }
 
-  // Handle checkbox selections
+  const pkg = packages[activeTab];
+
+  // Handle checkbox click
   const handleCheckbox = (category: 'entrees' | 'mains' | 'desserts', item: string, limit: number) => {
     setSelectedItems((prev) => {
-      const current = prev[category];
-      if (current.includes(item)) {
-        return { ...prev, [category]: current.filter((i) => i !== item) };
-      } else if (current.length < limit) {
-        return { ...prev, [category]: [...current, item] };
+      const selectedList = prev[category];
+
+      if (selectedList.includes(item)) {
+        return {
+          ...prev,
+          [category]: selectedList.filter((i) => i !== item)
+        };
       }
+
+      if (selectedList.length < limit) {
+        return {
+          ...prev,
+          [category]: [...selectedList, item]
+        };
+      }
+
+      alert(`❗ You can select only ${limit} items for ${category}.`);
       return prev;
     });
   };
 
-  // Handle Add to Cart
+  // Add to Cart
   const handleAddToCart = () => {
     if (!selectedPackage) return;
+
     if (guests < selectedPackage.minGuests) {
-      alert(`⚠️ Minimum ${selectedPackage.minGuests} guests required for this package.`);
+      alert(`⚠️ Minimum ${selectedPackage.minGuests} guests required.`);
       return;
     }
 
     addToCart({
-      id: selectedPackage.name + '-' + Date.now(),
+      id: selectedPackage.name + "-" + Date.now(),
       name: selectedPackage.name,
       price: selectedPackage.price,
       selections: selectedItems,
       guests: guests
     });
 
-    alert(`✅ ${selectedPackage.name} added for ${guests} guests!`);
+    alert(`✅ Added ${guests} guests for ${selectedPackage.name}!`);
+
+    // Reset
     setSelectedPackage(null);
     setSelectedItems({ entrees: [], mains: [], desserts: [], specialRequest: '' });
-    setGuests(15);
+    setGuests(selectedPackage.minGuests);
   };
 
   return (
@@ -104,47 +106,43 @@ export default function MenuPage() {
           <button
             key={tab}
             className={`px-6 py-3 text-lg font-semibold ${
-              activeTab === tab ? 'border-b-4 border-red-600 text-red-600' : 'text-gray-500'
+              activeTab === tab ? "border-b-4 border-red-600 text-red-600" : "text-gray-500"
             }`}
-            onClick={() => handleTabChange(tab)}
+            onClick={() => { setActiveTab(tab); setSelectedPackage(null); }}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)} Menu
+            {packages[tab].name}
           </button>
         ))}
       </div>
 
-      {/* Package cards */}
-      <div className="max-w-3xl mx-auto">
-        {(['standard', 'premium', 'deluxe'] as const).map(
-          (pkg) =>
-            activeTab === pkg && (
-              <div key={pkg} className="bg-white p-8 rounded-lg shadow-md text-center">
-                <h2 className="text-2xl font-bold mb-2">{PACKAGE_CONFIG[pkg].name}</h2>
-                <p className="text-gray-600">${PACKAGE_CONFIG[pkg].price} per person</p>
-                <p className="mt-3 text-gray-700">
-                  Minimum {PACKAGE_CONFIG[pkg].minGuests} guests required.
-                </p>
-                <button
-                  onClick={() => setSelectedPackage(PACKAGE_CONFIG[pkg])}
-                  className="mt-6 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold"
-                >
-                  Customize & Add to Order
-                </button>
-              </div>
-            )
-        )}
+      {/* Package card */}
+      <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md text-center">
+        <h2 className="text-2xl font-bold mb-2">{pkg.name}</h2>
+        <p className="text-gray-600">${pkg.price} per person</p>
+        <p className="mt-3 text-gray-700">Minimum {pkg.minGuests} guests required.</p>
+
+        <button
+          onClick={() => {
+            setSelectedPackage(pkg);
+            setGuests(pkg.minGuests);
+          }}
+          className="mt-6 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold"
+        >
+          Customize & Add to Order
+        </button>
       </div>
 
-      {/* Package Customizer Modal */}
+      {/* Customizer Modal */}
       {selectedPackage && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 px-4">
           <div className="bg-white max-w-3xl w-full rounded-lg shadow-lg p-8 overflow-y-auto max-h-[90vh]">
+
             <h1 className="text-3xl font-bold text-center mb-2">{selectedPackage.name}</h1>
             <p className="text-center text-gray-500 mb-6">
               ${selectedPackage.price} per person (Min {selectedPackage.minGuests} guests)
             </p>
 
-            {/* Guests input */}
+            {/* Guests */}
             <div className="mb-6">
               <label className="block text-lg font-semibold mb-2">Number of Guests</label>
               <input
@@ -156,78 +154,41 @@ export default function MenuPage() {
               />
             </div>
 
-            {/* Entrees */}
-            <div className="mb-6">
-              <h3 className="text-xl font-semibold mb-2">
-                Entrees (Select {selectedPackage.limits.entrees})
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                {selectedPackage.options.entrees.map((item: string) => (
-                  <label key={item} className="flex items-center space-x-2 border p-2 rounded">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.entrees.includes(item)}
-                      onChange={() =>
-                        handleCheckbox('entrees', item, selectedPackage.limits.entrees)
-                      }
-                    />
-                    <span>{item}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            {/* Categories */}
+            {(["entrees", "mains", "desserts"] as const).map((cat) => (
+              <div key={cat} className="mb-6">
+                <h3 className="text-xl font-semibold mb-2">
+                  {cat.toUpperCase()} (Select {selectedPackage.limits[cat]})
+                </h3>
 
-            {/* Mains */}
-            <div className="mb-6">
-              <h3 className="text-xl font-semibold mb-2">
-                Mains (Select {selectedPackage.limits.mains})
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                {selectedPackage.options.mains.map((item: string) => (
-                  <label key={item} className="flex items-center space-x-2 border p-2 rounded">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.mains.includes(item)}
-                      onChange={() => handleCheckbox('mains', item, selectedPackage.limits.mains)}
-                    />
-                    <span>{item}</span>
-                  </label>
-                ))}
+                <div className="grid grid-cols-2 gap-3">
+                  {selectedPackage.options[cat].map((item: string) => (
+                    <label key={item} className="flex items-center space-x-2 border p-2 rounded">
+                      <input
+                        type="checkbox"
+                        checked={selectedItems[cat].includes(item)}
+                        onChange={() =>
+                          handleCheckbox(cat, item, selectedPackage.limits[cat])
+                        }
+                      />
+                      <span>{item}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            ))}
 
-            {/* Desserts */}
-            <div className="mb-6">
-              <h3 className="text-xl font-semibold mb-2">
-                Desserts (Select {selectedPackage.limits.desserts})
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
-                {selectedPackage.options.desserts.map((item: string) => (
-                  <label key={item} className="flex items-center space-x-2 border p-2 rounded">
-                    <input
-                      type="checkbox"
-                      checked={selectedItems.desserts.includes(item)}
-                      onChange={() =>
-                        handleCheckbox('desserts', item, selectedPackage.limits.desserts)
-                      }
-                    />
-                    <span>{item}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Special Requests */}
+            {/* Special requests */}
             <div className="mb-6">
               <label className="block text-lg font-semibold mb-2">Special Requests</label>
               <textarea
-                className="w-full p-3 border rounded"
-                placeholder="e.g. Extra spicy, Nut allergy..."
                 value={selectedItems.specialRequest}
                 onChange={(e) =>
                   setSelectedItems((prev) => ({ ...prev, specialRequest: e.target.value }))
                 }
-              ></textarea>
+                className="w-full p-3 border rounded"
+                placeholder="e.g. Extra spicy, Nut allergy..."
+              />
             </div>
 
             {/* Buttons */}
@@ -245,9 +206,11 @@ export default function MenuPage() {
                 ← Cancel and Go Back
               </button>
             </div>
+
           </div>
         </div>
       )}
+
     </div>
   );
 }

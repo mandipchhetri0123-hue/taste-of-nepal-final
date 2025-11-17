@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { db, app } from '@/lib/firebase';
 import Link from 'next/link';
@@ -26,81 +26,71 @@ export default function RegisterPage() {
     if (form.password !== form.confirmPassword)
       return setError("Passwords don't match");
     if (!form.agree)
-      return setError('You must agree to the terms.');
+      return setError("You must agree to Terms & Conditions");
 
     try {
       setLoading(true);
 
-      // ✅ Create the user
       const userCred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-
-      // ✅ Update Firebase Auth profile with display name (first name)
-      await updateProfile(userCred.user, { displayName: form.firstName });
-
-      // ✅ Save user details in Firestore
-      await setDoc(doc(db, 'users', userCred.user.uid), {
+      await setDoc(doc(db, "users", userCred.user.uid), {
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
         gender: form.gender,
         dob: form.dob,
         bank: form.bank,
+        role: "customer"     // 👈 NEW
       });
 
-      alert('✅ Account created successfully!');
-      window.location.href = '/login';
+      alert('Account created!');
+      window.location.href = "/login";
+
     } catch (err: any) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
+
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="bg-white shadow-xl rounded-lg p-8 w-full max-w-md">
-        <h1 className="text-3xl font-bold text-center mb-4">Create Account</h1>
-        {error && <p className="text-red-500 text-center mb-3">{error}</p>}
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+        <h1 className="text-3xl font-bold mb-4 text-center">Create Account</h1>
+
+        {error && <p className="text-red-500 text-center">{error}</p>}
 
         <form onSubmit={handleRegister} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <input name="firstName" placeholder="First Name" onChange={handleChange} required className="border p-2 rounded" />
-            <input name="lastName" placeholder="Last Name" onChange={handleChange} required className="border p-2 rounded" />
+            <input className="border p-2 rounded" name="firstName" placeholder="First Name" onChange={handleChange} />
+            <input className="border p-2 rounded" name="lastName" placeholder="Last Name" onChange={handleChange} />
           </div>
 
-          <input name="email" type="email" placeholder="Email Address" onChange={handleChange} required className="border p-2 w-full rounded" />
+          <input className="border p-2 rounded w-full" name="email" placeholder="Email" type="email" onChange={handleChange} />
 
-          <select name="gender" onChange={handleChange} required className="border p-2 w-full rounded">
-            <option value="">Gender (Select...)</option>
-            <option>Male</option>
-            <option>Female</option>
-            <option>Other</option>
+          <select name="gender" className="border p-2 rounded w-full" onChange={handleChange}>
+            <option value="">Gender</option>
+            <option>Male</option><option>Female</option><option>Other</option>
           </select>
 
-          <input name="dob" type="date" placeholder="Date of Birth" onChange={handleChange} required className="border p-2 w-full rounded" />
+          <input className="border p-2 rounded w-full" name="dob" type="date" onChange={handleChange} />
 
-          <input name="password" type="password" placeholder="Password" onChange={handleChange} required className="border p-2 w-full rounded" />
-          <input name="confirmPassword" type="password" placeholder="Confirm Password" onChange={handleChange} required className="border p-2 w-full rounded" />
+          <input className="border p-2 rounded w-full" name="password" type="password" placeholder="Password" onChange={handleChange} />
 
-          <div>
-            <p className="text-sm text-gray-600 mb-1">
-              For Your Project Assessor (Simulation Only)
-            </p>
-            <input name="bank" placeholder="Bank Details (BSB & Account)" onChange={handleChange} className="border p-2 w-full rounded" />
-          </div>
+          <input className="border p-2 rounded w-full" name="confirmPassword" type="password" placeholder="Confirm Password" onChange={handleChange} />
 
-          <label className="flex items-center space-x-2 text-sm">
-            <input type="checkbox" name="agree" onChange={handleChange} /> 
-            <span>I agree to the Terms and Conditions</span>
+          <input className="border p-2 rounded w-full" name="bank" placeholder="Bank Details (simulation only)" onChange={handleChange} />
+
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="agree" onChange={handleChange} /> I agree to Terms & Conditions
           </label>
 
-          <button disabled={loading} className="w-full bg-red-600 text-white py-3 rounded font-semibold hover:bg-red-700">
-            {loading ? 'Creating...' : 'Create Account'}
+          <button className="w-full bg-red-600 text-white py-3 rounded hover:bg-red-700">
+            {loading ? "Creating..." : "Create Account"}
           </button>
         </form>
 
-        <p className="text-center mt-4 text-gray-600">
-          Already a member? <Link href="/login" className="text-blue-600 hover:underline">Login</Link>
+        <p className="text-center mt-4">
+          Already a member? <Link href="/login" className="text-blue-600">Login</Link>
         </p>
       </div>
     </div>
