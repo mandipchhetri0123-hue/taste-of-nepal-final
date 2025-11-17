@@ -27,13 +27,13 @@ export default function PaymentPage() {
   const [cvv, setCvv] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 🔥 FIX: Calculate total manually (your CartContext has no totalAmount())
+  // Calculate total manually
   const total = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.guests, 0),
     [cart]
   );
 
-  // Load temp checkout details
+  // Load temporary checkout data
   useEffect(() => {
     const data = sessionStorage.getItem("checkoutCustomer");
     if (!data) router.push("/checkout");
@@ -55,11 +55,11 @@ export default function PaymentPage() {
 
     setLoading(true);
 
-    // Simulate payment delay (no real card processing)
+    // Simulate payment delay
     await new Promise((r) => setTimeout(r, 1500));
 
     // Save order to Firestore
-    await addDoc(collection(db, "orders"), {
+    const newOrder = await addDoc(collection(db, "orders"), {
       userId: user.uid,
       items: cart,
       totalAmount: total,
@@ -70,6 +70,9 @@ export default function PaymentPage() {
       status: "Pending",
       createdAt: serverTimestamp(),
     });
+
+    // 🔥 Trigger admin real-time notification
+    localStorage.setItem("newOrder", newOrder.id);
 
     clearCart();
     sessionStorage.removeItem("checkoutCustomer");
@@ -85,8 +88,8 @@ export default function PaymentPage() {
         <h1 className="text-3xl font-bold mb-6 text-center">Secure Payment</h1>
 
         <div className="flex justify-center mb-4">
-          <img src="/visa.png" className="h-8 mr-2" />
-          <img src="/mastercard.png" className="h-8" />
+          <img src="/visa.png" className="h-8 mr-2" alt="visa" />
+          <img src="/mastercard.png" className="h-8" alt="mastercard" />
         </div>
 
         <label className="block mb-3">
