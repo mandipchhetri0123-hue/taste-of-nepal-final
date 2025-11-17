@@ -1,26 +1,36 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import AdminRoute from "@/components/AdminRoute";
 import Link from "next/link";
 
 export default function AdminDashboard() {
   const [newOrderId, setNewOrderId] = useState<string | null>(null);
 
-  // 🔥 Listen for new orders using localStorage flag
+  // Create audio reference (so it doesn't reload each time)
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
+    // Load sound (public/notification_long.wav)
+    audioRef.current = new Audio("/notification_long.wav");
     const interval = setInterval(() => {
       const orderId = localStorage.getItem("newOrder");
       if (orderId) {
         setNewOrderId(orderId);
 
-        // Show notification popup
+        // 🔊 PLAY NOTIFICATION SOUND
+        if (audioRef.current) {
+          audioRef.current.volume = 1.0;
+          audioRef.current.play().catch(() => {});
+        }
+
+        // Show popup alert
         alert(`🛎️ NEW ORDER RECEIVED!\nOrder ID: ${orderId}`);
 
-        // Clear flag so it doesn't repeat
+        // Remove flag so it doesn’t repeat
         localStorage.removeItem("newOrder");
       }
-    }, 2000); // Check every 2 seconds
+    }, 2000);
 
     return () => clearInterval(interval);
   }, []);
