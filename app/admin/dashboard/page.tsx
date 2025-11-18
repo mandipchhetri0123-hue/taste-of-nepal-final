@@ -9,7 +9,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     // Load sound
-    audioRef.current = new Audio("/notification.wav");
+    audioRef.current = new Audio("bell_notification.mp3");
 
     // Request permission for desktop notifications
     if (typeof window !== "undefined" && Notification.permission !== "granted") {
