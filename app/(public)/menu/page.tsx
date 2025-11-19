@@ -93,8 +93,100 @@ export default function MenuPage() {
     setGuests(selectedPackage.minGuests);
   };
 
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
+
+      {/* 👇 FEATURED DISHES SECTION (6 items) */}
+<section className="max-w-6xl mx-auto px-4 pt-12 pb-16">
+  <h2 className="text-4xl font-heading font-bold text-center mb-10">
+    Our Signature Catering Dishes
+  </h2>
+
+  <div className="grid md:grid-cols-3 gap-10">
+
+    {/* Fried Chicken */}
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
+      <img
+        src="https://img.freepik.com/premium-photo/deep-fried-chicken-nepali-snacks-with-chutney_723123-239.jpg"
+        className="w-full h-56 object-cover"
+        alt="Fried Chicken"
+      />
+      <div className="p-6">
+        <h3 className="text-2xl font-bold text-red-600 mb-2">Fried Chicken</h3>
+        <p className="text-gray-600">Crispy and flavour-packed chicken for events.</p>
+      </div>
+    </div>
+
+    {/* Chicken Choila */}
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
+      <img
+        src="https://junifoods.com/wp-content/uploads/2023/04/easy-chicken-choila-1024x693.png"
+        className="w-full h-56 object-cover"
+        alt="Chicken Choila"
+      />
+      <div className="p-6">
+        <h3 className="text-2xl font-bold text-red-600 mb-2">Chicken Choila</h3>
+        <p className="text-gray-600">Classic Nepali grilled spiced chicken.</p>
+      </div>
+    </div>
+
+    {/* Goat Curry */}
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
+      <img
+        src="https://boondockingrecipes.com/wp-content/uploads/2025/03/15.-Nepal-Slow-Cooker-Goat-Curry-Recipe-2-768x768.jpg"
+        className="w-full h-56 object-cover"
+        alt="Goat Curry"
+      />
+      <div className="p-6">
+        <h3 className="text-2xl font-bold text-red-600 mb-2">Goat Curry</h3>
+        <p className="text-gray-600">Slow-cooked tender goat in rich spices.</p>
+      </div>
+    </div>
+
+    {/* Paneer Kerau */}
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
+      <img
+        src="https://tse3.mm.bing.net/th/id/OIP.Cubwl8pmN-IAlDjoZVO91gHaJQ?rs=1&pid=ImgDetMain&o=7&rm=3"
+        className="w-full h-56 object-cover"
+        alt="Paneer Kerau"
+      />
+      <div className="p-6">
+        <h3 className="text-2xl font-bold text-red-600 mb-2">Paneer Kerau</h3>
+        <p className="text-gray-600">Soft paneer cooked with peas & Nepalese spices.</p>
+      </div>
+    </div>
+
+    {/* Dudhbari */}
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
+      <img
+        src="https://www.palatesdesire.com/wp-content/uploads/2015/07/Rasmalai_recipe@palates_desire.jpg"
+        className="w-full h-56 object-cover"
+        alt="Dudhbari"
+      />
+      <div className="p-6">
+        <h3 className="text-2xl font-bold text-red-600 mb-2">Dudhbari</h3>
+        <p className="text-gray-600">Sweet milk-soaked dumplings, a perfect dessert.</p>
+      </div>
+    </div>
+
+    {/* Lalmohan */}
+    <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
+      <img
+        src="https://media.istockphoto.com/id/1659939047/photo/lalmohan-or-gulab-jamun.jpg?s=612x612&w=0&k=20&c=gNa4LLPq4vK9pUOp3-7LOYVdKAPMxiGDz_HuMo3-HE8="
+        className="w-full h-56 object-cover"
+        alt="Lalmohan"
+      />
+      <div className="p-6">
+        <h3 className="text-2xl font-bold text-red-600 mb-2">Lalmohan</h3>
+        <p className="text-gray-600">Juicy deep-fried sweet dumplings.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
       <h1 className="text-4xl font-bold text-center mb-6">Our Catering Menu</h1>
       <p className="text-center text-gray-600 mb-10">
         Choose one of our packages below and customize it for your event.
