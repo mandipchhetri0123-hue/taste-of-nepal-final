@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, ChangeEvent } from "react";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import { getFirestore, doc, getDoc, updateDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
@@ -13,8 +13,9 @@ type UserData = {
   phone?: string;
   gender?: string;
   dob?: string;
-  bankDetails?: string;
 };
+
+const phoneRegex = /^\+[1-9]\d{7,14}$/;
 
 export default function ProfilePage() {
   const [userData, setUserData] = useState<UserData | null>(null);
@@ -53,24 +54,38 @@ export default function ProfilePage() {
     router.push("/login");
   };
 
+  const handleChange = (field: keyof UserData, value: string) => {
+    setUserData((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
   const handleSave = async () => {
     if (!auth.currentUser || !userData) return;
+
+    // Optional: basic checks
+    if (!userData.firstName?.trim() || !userData.lastName?.trim()) {
+      alert("Please enter your first and last name.");
+      return;
+    }
+
+    if (userData.phone && !phoneRegex.test(userData.phone.trim())) {
+      alert("Please enter a valid phone number in international format, e.g. +61412345678.");
+      return;
+    }
+
     setSaving(true);
 
     try {
       const ref = doc(db, "users", auth.currentUser.uid);
       await updateDoc(ref, {
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        phone: userData.phone,
-        gender: userData.gender,
-        dob: userData.dob,
-        bankDetails: userData.bankDetails,
+        firstName: userData.firstName?.trim() || "",
+        lastName: userData.lastName?.trim() || "",
+        phone: userData.phone?.trim() || "",
+        gender: userData.gender || "",
+        dob: userData.dob || "",
       });
 
       alert("✅ Profile updated successfully!");
       setEditMode(false);
-
     } catch (error) {
       console.error("Error updating profile:", error);
       alert("❌ Error updating profile.");
@@ -87,7 +102,6 @@ export default function ProfilePage() {
     );
   }
 
-  // 🛑 Fix null issue — TypeScript now knows that below this line userData is not null
   if (!userData) {
     return (
       <div className="text-center py-20">
@@ -107,19 +121,20 @@ export default function ProfilePage() {
       <h1 className="text-4xl font-bold text-center mb-8">My Profile</h1>
 
       <div className="space-y-4">
-
         {/* FIRST NAME */}
         <div>
           <h2 className="text-gray-600 text-sm font-semibold">First Name:</h2>
           {editMode ? (
             <input
               type="text"
-              value={userData!.firstName || ""}
-              onChange={(e) => setUserData({ ...userData!, firstName: e.target.value })}
+              value={userData.firstName || ""}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                handleChange("firstName", e.target.value)
+              }
               className="border p-2 w-full rounded"
             />
           ) : (
-            <p className="text-lg">{userData!.firstName}</p>
+            <p className="text-lg">{userData.firstName}</p>
           )}
         </div>
 
@@ -129,34 +144,38 @@ export default function ProfilePage() {
           {editMode ? (
             <input
               type="text"
-              value={userData!.lastName || ""}
-              onChange={(e) => setUserData({ ...userData!, lastName: e.target.value })}
+              value={userData.lastName || ""}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                handleChange("lastName", e.target.value)
+              }
               className="border p-2 w-full rounded"
             />
           ) : (
-            <p className="text-lg">{userData!.lastName}</p>
+            <p className="text-lg">{userData.lastName}</p>
           )}
         </div>
 
         {/* EMAIL */}
         <div>
           <h2 className="text-gray-600 text-sm font-semibold">Email:</h2>
-          <p className="text-lg">{userData!.email}</p>
+          <p className="text-lg">{userData.email}</p>
         </div>
 
-        {/* PHONE NUMBER */}
+        {/* PHONE */}
         <div>
           <h2 className="text-gray-600 text-sm font-semibold">Phone:</h2>
           {editMode ? (
             <input
-              type="text"
-              value={userData!.phone || ""}
-              onChange={(e) => setUserData({ ...userData!, phone: e.target.value })}
+              type="tel"
+              value={userData.phone || ""}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                handleChange("phone", e.target.value)
+              }
               className="border p-2 w-full rounded"
-              placeholder="04XX XXX XXX"
+              placeholder="e.g. +61412345678"
             />
           ) : (
-            <p className="text-lg">{userData!.phone || "Not provided"}</p>
+            <p className="text-lg">{userData.phone || "Not provided"}</p>
           )}
         </div>
 
@@ -165,8 +184,10 @@ export default function ProfilePage() {
           <h2 className="text-gray-600 text-sm font-semibold">Gender:</h2>
           {editMode ? (
             <select
-              value={userData!.gender || ""}
-              onChange={(e) => setUserData({ ...userData!, gender: e.target.value })}
+              value={userData.gender || ""}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                handleChange("gender", e.target.value)
+              }
               className="border p-2 w-full rounded"
             >
               <option value="">Select...</option>
@@ -175,7 +196,7 @@ export default function ProfilePage() {
               <option value="Other">Other</option>
             </select>
           ) : (
-            <p className="text-lg">{userData!.gender || "Not specified"}</p>
+            <p className="text-lg">{userData.gender || "Not specified"}</p>
           )}
         </div>
 
@@ -185,28 +206,14 @@ export default function ProfilePage() {
           {editMode ? (
             <input
               type="date"
-              value={userData!.dob || ""}
-              onChange={(e) => setUserData({ ...userData!, dob: e.target.value })}
+              value={userData.dob || ""}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                handleChange("dob", e.target.value)
+              }
               className="border p-2 w-full rounded"
             />
           ) : (
-            <p className="text-lg">{userData!.dob || "Not specified"}</p>
-          )}
-        </div>
-
-        {/* BANK DETAILS */}
-        <div>
-          <h2 className="text-gray-600 text-sm font-semibold">Bank Details:</h2>
-          {editMode ? (
-            <input
-              type="text"
-              placeholder="e.g. 000-000 12345678"
-              value={userData!.bankDetails || ""}
-              onChange={(e) => setUserData({ ...userData!, bankDetails: e.target.value })}
-              className="border p-2 w-full rounded"
-            />
-          ) : (
-            <p className="text-lg text-gray-500 italic">(Hidden for security)</p>
+            <p className="text-lg">{userData.dob || "Not specified"}</p>
           )}
         </div>
 

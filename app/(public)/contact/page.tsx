@@ -1,45 +1,68 @@
-'use client';
-import { useState } from 'react';
+"use client";
+
+import { useState, ChangeEvent, FormEvent } from "react";
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: '',
-    message: ''
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
   });
 
   const [submitted, setSubmitted] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.email || !formData.message) {
-      alert('⚠️ Please fill out all required fields.');
+
+    if (!formData.name.trim()) {
+      alert("⚠️ Please enter your name.");
       return;
     }
+
+    if (!formData.email.trim() || !emailRegex.test(formData.email.trim())) {
+      alert("⚠️ Please enter a valid email address (e.g. user@example.com).");
+      return;
+    }
+
+    if (!formData.message.trim()) {
+      alert("⚠️ Please enter your message.");
+      return;
+    }
+
     setSubmitted(true);
     setTimeout(() => {
-      setFormData({ name: '', email: '', subject: '', message: '' });
+      setFormData({ name: "", email: "", subject: "", message: "" });
       setSubmitted(false);
-      alert('✅ Your message has been sent successfully!');
+      alert("✅ Your message has been sent successfully!");
     }, 1200);
   };
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <h1 className="text-4xl font-bold text-center mb-8 text-nepal-red">Get In Touch</h1>
+      <h1 className="text-4xl font-bold text-center mb-8 text-nepal-red">
+        Get In Touch
+      </h1>
 
       {/* --- Contact Form --- */}
       <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12">
         <div className="bg-white shadow-md rounded-lg p-8">
-          <h2 className="text-2xl font-semibold mb-6 text-gray-800">Send Us a Message</h2>
+          <h2 className="text-2xl font-semibold mb-6 text-gray-800">
+            Send Us a Message
+          </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-gray-700 mb-1">Your Name (required)</label>
+              <label className="block text-gray-700 mb-1">
+                Your Name (required)
+              </label>
               <input
                 type="text"
                 name="name"
@@ -52,7 +75,9 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <label className="block text-gray-700 mb-1">Your Email (required)</label>
+              <label className="block text-gray-700 mb-1">
+                Your Email (required)
+              </label>
               <input
                 type="email"
                 name="email"
@@ -60,7 +85,7 @@ export default function ContactPage() {
                 onChange={handleChange}
                 required
                 className="w-full p-3 border rounded focus:ring-2 focus:ring-red-500 outline-none"
-                placeholder="Enter your email"
+                placeholder="Enter your email (e.g. user@example.com)"
               />
             </div>
 
@@ -77,7 +102,9 @@ export default function ContactPage() {
             </div>
 
             <div>
-              <label className="block text-gray-700 mb-1">Your Message</label>
+              <label className="block text-gray-700 mb-1">
+                Your Message
+              </label>
               <textarea
                 name="message"
                 value={formData.message}
@@ -94,7 +121,7 @@ export default function ContactPage() {
               disabled={submitted}
               className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6 py-3 rounded-lg w-full transition"
             >
-              {submitted ? 'Sending...' : 'Send Message'}
+              {submitted ? "Sending..." : "Send Message"}
             </button>
           </form>
         </div>
@@ -102,25 +129,36 @@ export default function ContactPage() {
         {/* --- Contact Info + Map --- */}
         <div className="space-y-6">
           <div className="bg-white shadow-md rounded-lg p-8">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Our Location & Contact Info</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800">
+              Our Location & Contact Info
+            </h2>
             <p className="text-gray-700 mb-3">
-              <strong>Address:</strong><br />
-              123 Nepal Street<br />
+              <strong>Address:</strong>
+              <br />
+              123 Nepal Street
+              <br />
               Hurstville, NSW 2220, Australia
             </p>
             <p className="text-gray-700 mb-3">
-              <strong>Phone:</strong><br />
-              0478 369 119<br />
+              <strong>Phone:</strong>
+              <br />
+              0478 369 119
+              <br />
               0414 543 436
             </p>
             <p className="text-gray-700 mb-3">
-              <strong>Email:</strong><br />
-              <a href="mailto:orders@tasteofnepal.com.au" className="text-red-600 hover:underline">
+              <strong>Email:</strong>
+              <br />
+              <a
+                href="mailto:orders@tasteofnepal.com.au"
+                className="text-red-600 hover:underline"
+              >
                 orders@tasteofnepal.com.au
               </a>
             </p>
             <p className="text-gray-700">
-              <strong>Opening Hours:</strong><br />
+              <strong>Opening Hours:</strong>
+              <br />
               Monday - Sunday: 11:00 AM - 9:00 PM
             </p>
           </div>
