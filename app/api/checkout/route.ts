@@ -1,24 +1,45 @@
+import Stripe from "stripe";
 import { NextRequest, NextResponse } from "next/server";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+  apiVersion: "2024-04-10",
+});
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Simulate payment delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
 
-    // Return fake success response
-    return NextResponse.json({
-      success: true,
-      message: "Payment simulated successfully",
-      order: {
-        id: Math.floor(Math.random() * 100000),
-        items: body.lines,
-        customer: body.customer,
+      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/checkout/payment`,
+
+      customer_email: body.customer.email,
+
+      metadata: {
+        userId: body.customer.userId,
+        fullName: body.customer.fullName,
+        phone: body.customer.phone,
+        address: body.customer.address,
+        note: body.customer.note || "",
+        items: JSON.stringify(body.items),
       },
+
+      line_items: body.items.map((item: any) => ({
+        price_data: {
+          currency: "aud",
+          product_data: { name: item.name },
+          unit_amount: Math.round(item.price * 100),
+        },
+        quantity: item.guests,
+      })),
     });
+
+    return NextResponse.json({ url: session.url });
   } catch (err: any) {
-    console.error("Checkout simulation failed:", err.message);
-    return NextResponse.json({ error: "Payment failed" }, { status: 500 });
+    console.error("Stripe error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

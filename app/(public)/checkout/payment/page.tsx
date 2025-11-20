@@ -3,81 +3,63 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/context/CartContext";
 import { useRouter } from "next/navigation";
-import { app } from "@/lib/firebase";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  serverTimestamp
-} from "firebase/firestore";
 import { getAuth } from "firebase/auth";
+import { app } from "@/lib/firebase";
 
 export default function PaymentPage() {
   const router = useRouter();
-  const { cart, clearCart } = useCart();
-  const db = getFirestore(app);
+  const { cart } = useCart();
   const auth = getAuth(app);
 
   const [customer, setCustomer] = useState<any>(null);
-
-  // Payment inputs
-  const [cardName, setCardName] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [exp, setExp] = useState("");
-  const [cvv, setCvv] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Calculate total manually
   const total = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.guests, 0),
     [cart]
   );
 
-  // Load temporary checkout data
   useEffect(() => {
     const data = sessionStorage.getItem("checkoutCustomer");
     if (!data) router.push("/checkout");
     else setCustomer(JSON.parse(data));
   }, []);
 
-  const handlePay = async () => {
-    if (!cardName || !cardNumber || !exp || !cvv) {
-      alert("Please fill all payment details.");
-      return;
-    }
+  const handlePayment = async () => {
+    if (!customer) return;
+    setLoading(true);
 
     const user = auth.currentUser;
     if (!user) {
-      alert("Please log in.");
+      alert("Please log in before paying.");
       router.push("/login");
       return;
     }
 
-    setLoading(true);
-
-    // Simulate payment delay
-    await new Promise((r) => setTimeout(r, 1500));
-
-    // Save order to Firestore
-    const newOrder = await addDoc(collection(db, "orders"), {
-      userId: user.uid,
-      items: cart,
-      totalAmount: total,
-      fullName: customer.fullName,
-      phone: customer.phone,
-      address: customer.address,
-      note: customer.note,
-      status: "Pending",
-      createdAt: serverTimestamp(),
+    const response = await fetch("/api/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customer: {
+          userId: user.uid,
+          fullName: customer.fullName,
+          phone: customer.phone,
+          address: customer.address,
+          note: customer.note,
+          email: user.email,
+        },
+        items: cart,
+      }),
     });
 
-    // 🔥 Trigger admin real-time notification
-    localStorage.setItem("newOrder", newOrder.id);
+    const data = await response.json();
 
-    clearCart();
-    sessionStorage.removeItem("checkoutCustomer");
-
-    router.push("/success");
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert("Payment failed to start.");
+      setLoading(false);
+    }
   };
 
   if (!customer) return null;
@@ -87,66 +69,25 @@ export default function PaymentPage() {
       <div className="bg-white shadow-lg p-8 rounded max-w-md w-full">
         <h1 className="text-3xl font-bold mb-6 text-center">Secure Payment</h1>
 
-        <div className="flex justify-center mb-4">
-          <img src="/visa.png" className="h-8 mr-2" alt="visa" />
-          <img src="/mastercard.png" className="h-8" alt="mastercard" />
-        </div>
+        <p className="text-center text-gray-600 mb-6">
+          You will be redirected to the secure Stripe Checkout page.
+        </p>
 
-        <label className="block mb-3">
-          <span className="font-semibold">Name on Card</span>
-          <input
-            className="w-full p-3 border rounded mt-1"
-            value={cardName}
-            onChange={(e) => setCardName(e.target.value)}
-            placeholder="John Doe"
-          />
-        </label>
-
-        <label className="block mb-3">
-          <span className="font-semibold">Card Number</span>
-          <input
-            className="w-full p-3 border rounded mt-1"
-            maxLength={16}
-            value={cardNumber}
-            onChange={(e) => setCardNumber(e.target.value)}
-            placeholder="1234 5678 9012 3456"
-          />
-        </label>
-
-        <div className="flex gap-3">
-          <label className="block flex-1">
-            <span className="font-semibold">Expiry</span>
-            <input
-              className="w-full p-3 border rounded mt-1"
-              maxLength={5}
-              value={exp}
-              onChange={(e) => setExp(e.target.value)}
-              placeholder="MM/YY"
-            />
-          </label>
-
-          <label className="block w-24">
-            <span className="font-semibold">CVV</span>
-            <input
-              className="w-full p-3 border rounded mt-1"
-              maxLength={3}
-              value={cvv}
-              onChange={(e) => setCvv(e.target.value)}
-              placeholder="123"
-            />
-          </label>
+        <div className="border p-4 rounded bg-gray-50 mb-4">
+          <h2 className="font-semibold mb-2">Order Total</h2>
+          <p className="text-xl font-bold">${total.toFixed(2)}</p>
         </div>
 
         <button
-          onClick={handlePay}
+          onClick={handlePayment}
           disabled={loading}
-          className="w-full bg-red-600 text-white p-4 rounded mt-6 text-xl hover:bg-red-700"
+          className="w-full bg-red-600 hover:bg-red-700 text-white p-4 rounded text-xl"
         >
-          {loading ? "Processing..." : `Pay $${total.toFixed(2)}`}
+          {loading ? "Processing…" : "Pay with Card"}
         </button>
 
         <p className="text-center text-gray-500 text-sm mt-4">
-          🔒 Your payment is securely simulated.
+          🔒 Payments are securely processed by Stripe.
         </p>
       </div>
     </div>
