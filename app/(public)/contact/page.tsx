@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, ChangeEvent, FormEvent } from "react";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
+// Validation
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const nameRegex = /^[A-Za-z\s]{2,40}$/;
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -14,36 +18,57 @@ export default function ContactPage() {
 
   const [submitted, setSubmitted] = useState(false);
 
+  // Handle input changes
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  // Submit Form
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name.trim()) {
-      alert("⚠️ Please enter your name.");
+    // Name validation
+    if (!nameRegex.test(formData.name.trim())) {
+      alert("⚠️ Enter a valid name (letters only, no numbers).");
       return;
     }
 
+    // Email validation
     if (!formData.email.trim() || !emailRegex.test(formData.email.trim())) {
-      alert("⚠️ Please enter a valid email address (e.g. user@example.com).");
+      alert("⚠️ Enter a valid email address (e.g. user@example.com).");
       return;
     }
 
+    // Message required
     if (!formData.message.trim()) {
       alert("⚠️ Please enter your message.");
       return;
     }
 
-    setSubmitted(true);
-    setTimeout(() => {
+    try {
+      setSubmitted(true);
+
+      // Save message in Firestore
+      await addDoc(collection(db, "messages"), {
+        name: formData.name,
+        email: formData.email,
+        subject: formData.subject || "No subject",
+        message: formData.message,
+        createdAt: serverTimestamp(),
+        status: "unread", // useful for admin message panel
+      });
+
+      alert("✅ Your message has been sent successfully!");
+
       setFormData({ name: "", email: "", subject: "", message: "" });
       setSubmitted(false);
-      alert("✅ Your message has been sent successfully!");
-    }, 1200);
+    } catch (error) {
+      console.error("❌ Firestore Error:", error);
+      alert("❌ Failed to send message. Please try again later.");
+      setSubmitted(false);
+    }
   };
 
   return (
@@ -52,13 +77,16 @@ export default function ContactPage() {
         Get In Touch
       </h1>
 
-      {/* --- Contact Form --- */}
       <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12">
+
+        {/* CONTACT FORM */}
         <div className="bg-white shadow-md rounded-lg p-8">
           <h2 className="text-2xl font-semibold mb-6 text-gray-800">
             Send Us a Message
           </h2>
+
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Name */}
             <div>
               <label className="block text-gray-700 mb-1">
                 Your Name (required)
@@ -74,6 +102,7 @@ export default function ContactPage() {
               />
             </div>
 
+            {/* Email */}
             <div>
               <label className="block text-gray-700 mb-1">
                 Your Email (required)
@@ -89,6 +118,7 @@ export default function ContactPage() {
               />
             </div>
 
+            {/* Subject */}
             <div>
               <label className="block text-gray-700 mb-1">Subject</label>
               <input
@@ -101,6 +131,7 @@ export default function ContactPage() {
               />
             </div>
 
+            {/* Message */}
             <div>
               <label className="block text-gray-700 mb-1">
                 Your Message
@@ -126,44 +157,40 @@ export default function ContactPage() {
           </form>
         </div>
 
-        {/* --- Contact Info + Map --- */}
+        {/* CONTACT INFO & MAP */}
         <div className="space-y-6">
           <div className="bg-white shadow-md rounded-lg p-8">
             <h2 className="text-2xl font-semibold mb-4 text-gray-800">
               Our Location & Contact Info
             </h2>
+
             <p className="text-gray-700 mb-3">
-              <strong>Address:</strong>
-              <br />
-              123 Nepal Street
-              <br />
+              <strong>Address:</strong><br />
+              123 Nepal Street<br />
               Hurstville, NSW 2220, Australia
             </p>
+
             <p className="text-gray-700 mb-3">
-              <strong>Phone:</strong>
-              <br />
-              0478 369 119
-              <br />
+              <strong>Phone:</strong><br />
+              0478 369 119<br />
               0414 543 436
             </p>
+
             <p className="text-gray-700 mb-3">
-              <strong>Email:</strong>
-              <br />
-              <a
-                href="mailto:orders@tasteofnepal.com.au"
-                className="text-red-600 hover:underline"
-              >
+              <strong>Email:</strong><br />
+              <a href="mailto:orders@tasteofnepal.com.au"
+                className="text-red-600 hover:underline">
                 orders@tasteofnepal.com.au
               </a>
             </p>
+
             <p className="text-gray-700">
-              <strong>Opening Hours:</strong>
-              <br />
+              <strong>Opening Hours:</strong><br />
               Monday - Sunday: 11:00 AM - 9:00 PM
             </p>
           </div>
 
-          {/* Google Map Embed */}
+          {/* Google Map */}
           <div className="rounded-lg overflow-hidden shadow-md">
             <iframe
               title="Taste of Nepal Location"
