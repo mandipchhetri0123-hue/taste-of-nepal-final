@@ -3,16 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/firebase";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 
-export const config = {
-  api: { bodyParser: false },
-};
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2024-04-10",
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
 export async function POST(req: NextRequest) {
-  const sig = req.headers.get("stripe-signature")!;
+  const signature = req.headers.get("stripe-signature")!;
   const rawBody = await req.text();
 
   let event;
@@ -20,8 +17,8 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(
       rawBody,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET as string
     );
   } catch (err: any) {
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
@@ -29,7 +26,6 @@ export async function POST(req: NextRequest) {
 
   if (event.type === "checkout.session.completed") {
     const session: any = event.data.object;
-
     const metadata = session.metadata || {};
     const items = JSON.parse(metadata.items || "[]");
 
@@ -40,7 +36,7 @@ export async function POST(req: NextRequest) {
       address: metadata.address,
       note: metadata.note,
       items,
-      totalAmount: (session.amount_total ?? 0) / 100,
+      totalAmount: (session.amount_total! / 100),
       status: "Paid",
       createdAt: serverTimestamp(),
     });
