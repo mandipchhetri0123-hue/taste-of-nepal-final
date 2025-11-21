@@ -2,6 +2,12 @@ import Stripe from "stripe";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDB, adminFieldValue } from "@/lib/firebaseAdmin";
 
+export const config = {
+  api: {
+    bodyParser: false, // ⛔ Necessary for Stripe webhook
+  },
+};
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -9,16 +15,29 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2025-10-29.clover",
 });
 
-export async function POST(req: NextRequest) {
-  const sig = req.headers.get("stripe-signature");
-  if (!sig) {
-    console.error("❌ No stripe-signature header");
-    return new NextResponse("No signature", { status: 400 });
+// RAW BODY READER for Vercel
+async function buffer(req: Request) {
+  const chunks = [];
+  const reader = req.body?.getReader();
+  if (!reader) return Buffer.from("");
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
   }
 
-  const rawBody = await req.text();
+  return Buffer.concat(chunks);
+}
+
+export async function POST(req: NextRequest) {
+  const sig = req.headers.get("stripe-signature");
+  if (!sig) return new NextResponse("Missing signature", { status: 400 });
+
+  const rawBody = await buffer(req);
 
   let event: Stripe.Event;
+
   try {
     event = stripe.webhooks.constructEvent(
       rawBody,
@@ -32,79 +51,53 @@ export async function POST(req: NextRequest) {
 
   console.log("✅ Webhook received:", event.type);
 
-  // ================================
-  // HANDLE PAID ORDER
-  // ================================
+  // ============================================
+  // CHECKOUT SUCCESS
+  // ============================================
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata || {};
 
-    // PARSE ITEMS
     let items: any[] = [];
     try {
-      items = metadata.items ? JSON.parse(metadata.items as string) : [];
+      items = metadata.items ? JSON.parse(metadata.items) : [];
     } catch (e) {
-      console.error("❌ Failed to parse items metadata:", e);
+      console.error("❌ JSON parse error:", e);
     }
 
-    const fullName = (metadata.fullName as string) || "";
+    const fullName = metadata.fullName || "";
     const [firstName, ...rest] = fullName.split(" ");
     const lastName = rest.join(" ");
-
-    const totalGuests = items.reduce(
-      (sum, item) => sum + (item.guests || 0),
-      0
-    );
-
-    const packageName = items[0]?.name || "";
-
-    // ================================
-    // 1️⃣ SAVE ORDER TO FIRESTORE
-    // ================================
-    try {
-      await adminDB.collection("orders").add({
-        userId: metadata.userId || null,
-        fullName,
-        firstName,
-        lastName,
-        phone: metadata.phone || "",
-        email:
-          (metadata.email as string) ||
-          session.customer_details?.email ||
-          "",
-        address: metadata.address || "",
-        note: metadata.note || "",
-        items,
-        packageName,
-        totalGuests,
-        totalAmount: (session.amount_total ?? 0) / 100,
-        status: "Paid",
-        createdAt: adminFieldValue.serverTimestamp(),
-      });
-
-      console.log("✅ Order saved to Firestore");
-    } catch (err: any) {
-      console.error("❌ Firestore save error:", err.message);
-      return new NextResponse("Firestore error", { status: 500 });
-    }
-
-    // ================================
-    // 2️⃣ SEND EMAIL USING FORMSPREE
-    // ================================
-    const customerEmail =
-      (metadata.email as string) ||
+    const email =
+      metadata.email ||
       session.customer_details?.email ||
       "";
 
-    if (customerEmail) {
-      try {
-        const htmlItems = items
-          .map(
-            (i: any) =>
-              `• ${i.name} — ${i.guests} guests — $${i.price * i.guests}`
-          )
-          .join("\n");
+    // Save order
+    await adminDB.collection("orders").add({
+      userId: metadata.userId || null,
+      fullName,
+      firstName,
+      lastName,
+      phone: metadata.phone || "",
+      email,
+      address: metadata.address || "",
+      note: metadata.note || "",
+      items,
+      packageName: items[0]?.name || "",
+      totalGuests: items.reduce((s, i) => s + i.guests, 0),
+      totalAmount: (session.amount_total ?? 0) / 100,
+      status: "Paid",
+      createdAt: adminFieldValue.serverTimestamp(),
+    });
 
+    console.log("✅ Order saved to Firestore");
+
+    // ============================================
+    // SEND EMAIL USING FORMSPREE
+    // ============================================
+    if (email) {
+      try {
         await fetch("https://formspree.io/f/xblwnoan", {
           method: "POST",
           headers: {
@@ -112,41 +105,37 @@ export async function POST(req: NextRequest) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            email: customerEmail,
+            email,
             message: `
 Thank you for your order, ${fullName}!
 
-Your payment was successful and your order has been recorded.
+Your order has been received and payment was successful.
 
-===========================
-ORDER SUMMARY
-===========================
+--- ORDER SUMMARY ---
 
-${htmlItems}
+${items.map((i) => `${i.name} - ${i.guests} guests`).join("\n")}
 
 Total Paid: $${(session.amount_total ?? 0) / 100}
 
-===========================
-FAQ
-===========================
+--- FAQ ---
 
 1. When will I be contacted?
-→ Our team will contact you within 24 hours to confirm your event details.
+→ Within 24 hours.
 
 2. Can I modify my order?
-→ Yes! Simply reply to this email and we will assist you.
+→ Yes! Reply to this email.
 
-3. What about refunds?
-→ Refunds depend on the preparation status. Contact us to discuss options.
+3. Refunds?
+→ Contact customer support.
 
 Thank you for choosing Taste of Nepal!
-            `,
+`,
           }),
         });
 
-        console.log("📧 Email sent via Formspree to:", customerEmail);
-      } catch (emailErr: any) {
-        console.error("❌ Error sending email:", emailErr.message);
+        console.log("📧 Email sent to:", email);
+      } catch (emailErr) {
+        console.error("❌ Email send failed:", emailErr);
       }
     }
   }
