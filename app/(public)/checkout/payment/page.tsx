@@ -14,57 +14,52 @@ export default function PaymentPage() {
   const [customer, setCustomer] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  // Calculate total
   const total = useMemo(
     () => cart.reduce((sum, item) => sum + item.price * item.guests, 0),
     [cart]
   );
 
-  // Load checkout info
+  // Load checkout data
   useEffect(() => {
     const data = sessionStorage.getItem("checkoutCustomer");
     if (!data) router.push("/checkout");
     else setCustomer(JSON.parse(data));
-  }, [router]);
+  }, []);
 
   const handlePayment = async () => {
     if (!customer) return;
-    setLoading(true);
 
     const user = auth.currentUser;
     if (!user) {
-      alert("Please log in before paying.");
+      alert("Please login before paying.");
       router.push("/login");
       return;
     }
 
-    try {
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer: {
-            userId: user.uid,
-            fullName: customer.fullName,
-            phone: customer.phone,
-            address: customer.address,
-            note: customer.note,
-            email: user.email,
-          },
-          items: cart,
-        }),
-      });
+    setLoading(true);
 
-      const data = await res.json();
+    const response = await fetch("/api/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        customer: {
+          userId: user.uid,
+          fullName: customer.fullName,
+          phone: customer.phone,
+          address: customer.address,
+          note: customer.note,
+          email: user.email,
+        },
+        items: cart,
+      }),
+    });
 
-      if (data.url) {
-        window.location.href = data.url; // Stripe redirect
-      } else {
-        alert("Payment failed to start.");
-      }
-    } catch (err) {
-      console.error("Payment error:", err);
-      alert("Payment could not start.");
+    const data = await response.json();
+
+    if (data.url) {
+      window.location.href = data.url; // Redirect to Stripe Checkout
+    } else {
+      alert("Payment failed to start.");
     }
 
     setLoading(false);
@@ -91,7 +86,7 @@ export default function PaymentPage() {
           disabled={loading}
           className="w-full bg-red-600 hover:bg-red-700 text-white p-4 rounded text-xl"
         >
-          {loading ? "Processing..." : "Pay with Card"}
+          {loading ? "Processing…" : "Pay with Card"}
         </button>
 
         <p className="text-center text-gray-500 text-sm mt-4">

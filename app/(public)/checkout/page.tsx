@@ -156,11 +156,11 @@ export default function CheckoutPage() {
         <button
         type="submit"
         disabled={saving}
-        onClick={() => console.log("Button clicked")}
         className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 w-full disabled:opacity-60"
 >
         {saving ? "Processing…" : "Proceed to Payment"}
         </button>
+
       </form>
     </div>
   );
