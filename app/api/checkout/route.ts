@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
         phone: body.customer.phone,
         address: body.customer.address,
         note: body.customer.note ?? "",
+        email: body.customer.email,     // <-- IMPORTANT FIX
         items: JSON.stringify(body.items),
       },
 
