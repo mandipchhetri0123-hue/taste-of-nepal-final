@@ -38,38 +38,43 @@ export default function CheckoutPage() {
   }
 
   // Handle NEXT STEP → store details & go to payment page
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+ const handleSubmit = async (e: FormEvent) => {
+  e.preventDefault(); // Always prevent page refresh
 
-    if (!fullName || !phone || !address) {
-      alert('Please fill in Full Name, Phone and Address.');
-      return;
-    }
+  if (!fullName || !phone || !address) {
+    alert("Please fill in Full Name, Phone and Address.");
+    return;
+  }
 
-    const user = auth.currentUser;
+  const user = auth.currentUser;
 
-    if (!user) {
-      alert('Please login before placing an order.');
-      router.push('/login');
-      return;
-    }
+  if (!user) {
+    alert("Please login before placing an order.");
+    router.push("/login");
+    return;
+  }
 
-    setSaving(true);
+  setSaving(true);
 
-    // Save customer details temporarily for payment page
-    sessionStorage.setItem(
-      'checkoutCustomer',
-      JSON.stringify({
-        fullName,
-        phone,
-        address,
-        note,
-      })
-    );
+  // Save customer details
+  sessionStorage.setItem(
+    "checkoutCustomer",
+    JSON.stringify({
+      fullName,
+      phone,
+      address,
+      note,
+    })
+  );
 
-    // Redirect to payment page
-    router.push('/checkout/payment');
-  };
+  console.log("Redirecting to /checkout/payment ...");
+
+  // small delay ensures Next.js hydration safety
+  setTimeout(() => {
+    router.push("/checkout/payment");
+  }, 10);
+};
+
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
@@ -149,11 +154,12 @@ export default function CheckoutPage() {
         </div>
 
         <button
-          type="submit"
-          disabled={saving}
-          className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 w-full disabled:opacity-60"
-        >
-          {saving ? 'Processing…' : 'Proceed to Payment'}
+        type="submit"
+        disabled={saving}
+        onClick={() => console.log("Button clicked")}
+        className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 w-full disabled:opacity-60"
+>
+        {saving ? "Processing…" : "Proceed to Payment"}
         </button>
       </form>
     </div>
