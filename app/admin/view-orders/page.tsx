@@ -20,6 +20,12 @@ type OrderItem = {
   name: string;
   guests: number;
   price: number;
+  selections?: {
+    entrees?: string[];
+    mains?: string[];
+    desserts?: string[];
+    specialRequest?: string;
+  };
 };
 
 type OrderDoc = {
@@ -88,9 +94,12 @@ export default function AdminDatabase() {
       conditions.push(where("createdAt", ">=", start));
       conditions.push(where("createdAt", "<=", end));
     }
-    if (orderFirstName.trim()) conditions.push(where("firstName", "==", orderFirstName.trim()));
-    if (orderLastName.trim()) conditions.push(where("lastName", "==", orderLastName.trim()));
-    if (orderPhone.trim()) conditions.push(where("phone", "==", orderPhone.trim()));
+    if (orderFirstName.trim())
+      conditions.push(where("firstName", "==", orderFirstName.trim()));
+    if (orderLastName.trim())
+      conditions.push(where("lastName", "==", orderLastName.trim()));
+    if (orderPhone.trim())
+      conditions.push(where("phone", "==", orderPhone.trim()));
 
     if (packageType !== "any") {
       const pkg =
@@ -110,7 +119,10 @@ export default function AdminDatabase() {
 
     const snap = await getDocs(qRef);
 
-    let results = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+    let results: any[] = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as any),
+    }));
 
     if (guestsFilter.trim()) {
       const guestsNum = Number(guestsFilter);
@@ -118,14 +130,19 @@ export default function AdminDatabase() {
       results = results
         .map((o) => ({
           ...o,
-          totalGuests: o.items.reduce((s: number, i: any) => s + i.guests, 0),
+          totalGuests: o.items?.reduce(
+            (s: number, i: OrderItem) => s + (i.guests || 0),
+            0
+          ),
         }))
         .filter((o) =>
-          guestsMode === "exact" ? o.totalGuests === guestsNum : o.totalGuests >= guestsNum
+          guestsMode === "exact"
+            ? o.totalGuests === guestsNum
+            : o.totalGuests >= guestsNum
         );
     }
 
-    setOrderResults(results);
+    setOrderResults(results as OrderDoc[]);
   };
 
   // ===========================================================
@@ -139,10 +156,14 @@ export default function AdminDatabase() {
       conditions.push(where("createdAt", ">=", start));
       conditions.push(where("createdAt", "<=", end));
     }
-    if (userFirstName.trim()) conditions.push(where("firstName", "==", userFirstName.trim()));
-    if (userLastName.trim()) conditions.push(where("lastName", "==", userLastName.trim()));
-    if (userPhone.trim()) conditions.push(where("phone", "==", userPhone.trim()));
-    if (userEmail.trim()) conditions.push(where("email", "==", userEmail.trim()));
+    if (userFirstName.trim())
+      conditions.push(where("firstName", "==", userFirstName.trim()));
+    if (userLastName.trim())
+      conditions.push(where("lastName", "==", userLastName.trim()));
+    if (userPhone.trim())
+      conditions.push(where("phone", "==", userPhone.trim()));
+    if (userEmail.trim())
+      conditions.push(where("email", "==", userEmail.trim()));
 
     const qRef =
       conditions.length > 0
@@ -151,7 +172,7 @@ export default function AdminDatabase() {
 
     const snap = await getDocs(qRef);
 
-    const results = snap.docs.map((d) => ({
+    const results: UserDoc[] = snap.docs.map((d) => ({
       id: d.id,
       ...(d.data() as any),
     }));
@@ -163,8 +184,12 @@ export default function AdminDatabase() {
   // 📦 LOAD ALL ORDERS
   // ===========================================================
   const fetchAllOrders = async () => {
-    const snap = await getDocs(query(collection(db, "orders"), orderBy("createdAt", "desc")));
-    setAllOrders(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+    const snap = await getDocs(
+      query(collection(db, "orders"), orderBy("createdAt", "desc"))
+    );
+    setAllOrders(
+      snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as OrderDoc[]
+    );
   };
 
   // ===========================================================
@@ -172,7 +197,45 @@ export default function AdminDatabase() {
   // ===========================================================
   const fetchAllUsers = async () => {
     const snap = await getDocs(collection(db, "users"));
-    setAllUsers(snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })));
+    setAllUsers(
+      snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as UserDoc[]
+    );
+  };
+
+  // Helper to render selections (entrees/mains/desserts)
+  const renderSelections = (item: OrderItem) => {
+    const sels = item.selections || {};
+    const hasEntrees = (sels.entrees?.length || 0) > 0;
+    const hasMains = (sels.mains?.length || 0) > 0;
+    const hasDesserts = (sels.desserts?.length || 0) > 0;
+    const hasSpecial = !!sels.specialRequest;
+
+    if (!hasEntrees && !hasMains && !hasDesserts && !hasSpecial) return null;
+
+    return (
+      <div className="ml-8 mt-1 text-sm text-gray-700">
+        {hasEntrees && (
+          <p>
+            <strong>Entrees:</strong> {sels.entrees!.join(", ")}
+          </p>
+        )}
+        {hasMains && (
+          <p>
+            <strong>Mains:</strong> {sels.mains!.join(", ")}
+          </p>
+        )}
+        {hasDesserts && (
+          <p>
+            <strong>Desserts:</strong> {sels.desserts!.join(", ")}
+          </p>
+        )}
+        {hasSpecial && (
+          <p>
+            <strong>Special Request:</strong> {sels.specialRequest}
+          </p>
+        )}
+      </div>
+    );
   };
 
   // ===========================================================
@@ -261,7 +324,9 @@ export default function AdminDatabase() {
               <label>Guest Filter Mode</label>
               <select
                 value={guestsMode}
-                onChange={(e) => setGuestsMode(e.target.value as any)}
+                onChange={(e) =>
+                  setGuestsMode(e.target.value as "exact" | "min")
+                }
                 className="border p-2 rounded w-full"
               >
                 <option value="exact">Exact</option>
@@ -278,31 +343,57 @@ export default function AdminDatabase() {
           </button>
 
           {/* ORDER RESULTS */}
-          {orderResults.map((o) => (
-            <div key={o.id} className="border p-4 mt-4 rounded bg-gray-50">
-              <h3 className="font-bold text-xl">
-                {o.firstName} {o.lastName} — ${o.totalAmount}
-              </h3>
-              <p><strong>Email:</strong> {o.email}</p>
-              <p><strong>Phone:</strong> {o.phone}</p>
-              <p><strong>Address:</strong> {o.address}</p>
-              <p><strong>Created:</strong> {o.createdAt?.toDate()?.toLocaleString()}</p>
+          {orderResults.map((o: any) => {
+            const totalGuests =
+              o.items?.reduce(
+                (s: number, i: OrderItem) => s + (i.guests || 0),
+                0
+              ) ?? 0;
 
-              <p className="mt-2 font-semibold underline">Items:</p>
-              {o.items.map((item, i) => (
-                <p key={i} className="ml-4">
-                  {item.name} — {item.guests} guests — ${item.price * item.guests}
+            return (
+              <div key={o.id} className="border p-4 mt-4 rounded bg-gray-50">
+                <h3 className="font-bold text-xl">
+                  {o.firstName} {o.lastName} — ${o.totalAmount}
+                </h3>
+                <p>
+                  <strong>Email:</strong> {o.email}
                 </p>
-              ))}
-            </div>
-          ))}
+                <p>
+                  <strong>Phone:</strong> {o.phone}
+                </p>
+                <p>
+                  <strong>Address:</strong> {o.address}
+                </p>
+                <p>
+                  <strong>Total Guests:</strong> {totalGuests}
+                </p>
+                <p>
+                  <strong>Created:</strong>{" "}
+                  {o.createdAt?.toDate()?.toLocaleString()}
+                </p>
+
+                <p className="mt-2 font-semibold underline">Items:</p>
+                {o.items?.map((item: OrderItem, i: number) => (
+                  <div key={i} className="ml-4 mt-1">
+                    <p>
+                      {item.name} — {item.guests} guests — $
+                      {item.price * item.guests}
+                    </p>
+                    {renderSelections(item)}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
 
         {/* ===================================== */}
-        {/* USER REGISTRATION QUERY SECTION (BACK) */}
+        {/* USER REGISTRATION QUERY SECTION */}
         {/* ===================================== */}
         <div className="bg-white p-6 rounded shadow mb-14">
-          <h2 className="text-2xl font-semibold mb-6">User Registration Query</h2>
+          <h2 className="text-2xl font-semibold mb-6">
+            User Registration Query
+          </h2>
 
           <div className="grid md:grid-cols-4 gap-6 mb-6">
             <div>
@@ -366,14 +457,29 @@ export default function AdminDatabase() {
           {/* USER RESULTS */}
           {userResults.map((u) => (
             <div key={u.id} className="border p-4 mt-4 rounded bg-gray-50">
-              <h3 className="text-xl font-bold">{u.firstName} {u.lastName}</h3>
+              <h3 className="text-xl font-bold">
+                {u.firstName} {u.lastName}
+              </h3>
 
-              <p><strong>Email:</strong> {u.email}</p>
-              <p><strong>Phone:</strong> {u.phone}</p>
-              <p><strong>Gender:</strong> {u.gender}</p>
-              <p><strong>Date of Birth:</strong> {u.dob}</p>
-              <p><strong>Role:</strong> {u.role}</p>
-              <p><strong>Created At:</strong> {u.createdAt?.toDate()?.toLocaleString()}</p>
+              <p>
+                <strong>Email:</strong> {u.email}
+              </p>
+              <p>
+                <strong>Phone:</strong> {u.phone}
+              </p>
+              <p>
+                <strong>Gender:</strong> {u.gender}
+              </p>
+              <p>
+                <strong>Date of Birth:</strong> {u.dob}
+              </p>
+              <p>
+                <strong>Role:</strong> {u.role}
+              </p>
+              <p>
+                <strong>Created At:</strong>{" "}
+                {u.createdAt?.toDate()?.toLocaleString()}
+              </p>
             </div>
           ))}
         </div>
@@ -391,25 +497,49 @@ export default function AdminDatabase() {
             Load All Orders
           </button>
 
-          {allOrders.map((o) => (
-            <div key={o.id} className="border p-4 mt-4 rounded bg-gray-50">
-              <h3 className="text-xl font-bold">
-                {o.firstName} {o.lastName} — ${o.totalAmount}
-              </h3>
+          {allOrders.map((o: any) => {
+            const totalGuests =
+              o.items?.reduce(
+                (s: number, i: OrderItem) => s + (i.guests || 0),
+                0
+              ) ?? 0;
 
-              <p><strong>Email:</strong> {o.email}</p>
-              <p><strong>Phone:</strong> {o.phone}</p>
-              <p><strong>Address:</strong> {o.address}</p>
-              <p><strong>Created:</strong> {o.createdAt?.toDate()?.toLocaleString()}</p>
+            return (
+              <div key={o.id} className="border p-4 mt-4 rounded bg-gray-50">
+                <h3 className="text-xl font-bold">
+                  {o.firstName} {o.lastName} — ${o.totalAmount}
+                </h3>
 
-              <p className="mt-2 font-semibold underline">Items:</p>
-              {o.items.map((item, i) => (
-                <p key={i} className="ml-4">
-                  {item.name} — {item.guests} guests — ${item.price * item.guests}
+                <p>
+                  <strong>Email:</strong> {o.email}
                 </p>
-              ))}
-            </div>
-          ))}
+                <p>
+                  <strong>Phone:</strong> {o.phone}
+                </p>
+                <p>
+                  <strong>Address:</strong> {o.address}
+                </p>
+                <p>
+                  <strong>Total Guests:</strong> {totalGuests}
+                </p>
+                <p>
+                  <strong>Created:</strong>{" "}
+                  {o.createdAt?.toDate()?.toLocaleString()}
+                </p>
+
+                <p className="mt-2 font-semibold underline">Items:</p>
+                {o.items?.map((item: OrderItem, i: number) => (
+                  <div key={i} className="ml-4 mt-1">
+                    <p>
+                      {item.name} — {item.guests} guests — $
+                      {item.price * item.guests}
+                    </p>
+                    {renderSelections(item)}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
 
         {/* ---------------------------------------- */}
@@ -427,14 +557,29 @@ export default function AdminDatabase() {
 
           {allUsers.map((u) => (
             <div key={u.id} className="border p-4 mt-4 rounded bg-gray-50">
-              <h3 className="font-bold text-xl">{u.firstName} {u.lastName}</h3>
+              <h3 className="font-bold text-xl">
+                {u.firstName} {u.lastName}
+              </h3>
 
-              <p><strong>Email:</strong> {u.email}</p>
-              <p><strong>Phone:</strong> {u.phone}</p>
-              <p><strong>Gender:</strong> {u.gender}</p>
-              <p><strong>Date of Birth:</strong> {u.dob}</p>
-              <p><strong>Role:</strong> {u.role}</p>
-              <p><strong>Created:</strong> {u.createdAt?.toDate()?.toLocaleString()}</p>
+              <p>
+                <strong>Email:</strong> {u.email}
+              </p>
+              <p>
+                <strong>Phone:</strong> {u.phone}
+              </p>
+              <p>
+                <strong>Gender:</strong> {u.gender}
+              </p>
+              <p>
+                <strong>Date of Birth:</strong> {u.dob}
+              </p>
+              <p>
+                <strong>Role:</strong> {u.role}
+              </p>
+              <p>
+                <strong>Created:</strong>{" "}
+                {u.createdAt?.toDate()?.toLocaleString()}
+              </p>
             </div>
           ))}
         </div>
