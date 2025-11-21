@@ -1,7 +1,6 @@
 import Stripe from "stripe";
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/firebase";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { adminDB } from "@/firebase/admin";  // <-- FIXED IMPORT
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +10,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
 });
 
 export async function POST(req: NextRequest) {
-  const sig = req.headers.get("stripe-signature")!;
+  const sig = req.headers.get("stripe-signature");
   const rawBody = await req.text();
 
   let event;
@@ -19,16 +18,17 @@ export async function POST(req: NextRequest) {
   try {
     event = stripe.webhooks.constructEvent(
       rawBody,
-      sig,
+      sig!,
       process.env.STRIPE_WEBHOOK_SECRET as string
     );
   } catch (err: any) {
-    console.error("❌ Webhook signature error:", err.message);
+    console.error("❌ Webhook Error:", err.message);
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
   if (event.type === "checkout.session.completed") {
     const session: any = event.data.object;
+
     const metadata = session.metadata || {};
     const items = JSON.parse(metadata.items || "[]");
 
@@ -41,27 +41,25 @@ export async function POST(req: NextRequest) {
       0
     );
 
-    const packageName = items[0]?.name || "";
-
     try {
-      await addDoc(collection(db, "orders"), {
+      await adminDB.collection("orders").add({
         userId: metadata.userId,
         fullName,
         firstName,
         lastName,
         phone: metadata.phone,
-        email: metadata.email || "",
+        email: metadata.email,
         address: metadata.address,
-        note: metadata.note || "",
+        note: metadata.note ?? "",
         items,
-        packageName,
+        packageName: items[0]?.name || "",
         totalGuests,
         totalAmount: (session.amount_total ?? 0) / 100,
         status: "Paid",
-        createdAt: serverTimestamp(),
+        createdAt: new Date(),
       });
 
-      console.log("✅ Order saved to Firestore!");
+      console.log("✅ SAVED ORDER TO FIRESTORE");
     } catch (err: any) {
       console.error("❌ Firestore Save Error:", err.message);
     }
