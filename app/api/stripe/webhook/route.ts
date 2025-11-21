@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ------------------------------
-  // Handle successful payment
+  // Successful Stripe Payment
   // ------------------------------
   if (event.type === "checkout.session.completed") {
     const session: any = event.data.object;
@@ -33,25 +33,34 @@ export async function POST(req: NextRequest) {
     const metadata = session.metadata || {};
     const items = JSON.parse(metadata.items || "[]");
 
+    // Extract names
     const fullName = metadata.fullName || "";
     const [firstName, ...rest] = fullName.split(" ");
     const lastName = rest.join(" ");
 
+    // Extract guest & package data
     const packageName = items[0]?.name || "";
     const totalGuests = items.reduce(
       (sum: number, item: any) => sum + (item.guests || 0),
       0
     );
 
-    // Save to Firestore in clean format
+    // Always use Stripe email if metadata email missing
+    const email =
+      metadata.email ||
+      session.customer_details?.email ||
+      session.customer_email ||
+      "";
+
+    // Save order cleanly
     await addDoc(collection(db, "orders"), {
       userId: metadata.userId,
       fullName,
       firstName,
       lastName,
-      phone: metadata.phone,
-      email: metadata.email || "",
-      address: metadata.address,
+      phone: metadata.phone || "",
+      email,
+      address: metadata.address || "",
       note: metadata.note || "",
       items,
       packageName,
