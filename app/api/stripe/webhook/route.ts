@@ -6,6 +6,13 @@ import { Resend } from "resend";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Required for Stripe raw body
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 // Stripe Instance
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2025-10-29.clover",
@@ -16,16 +23,13 @@ const resend = new Resend(process.env.RESEND_API_KEY as string);
 
 export async function POST(req: NextRequest) {
   const sig = req.headers.get("stripe-signature");
-
   if (!sig) {
     return new NextResponse("Missing stripe-signature", { status: 400 });
   }
 
-  // Stripe requires raw body (req.text)
   const rawBody = await req.text();
 
   let event: Stripe.Event;
-
   try {
     event = stripe.webhooks.constructEvent(
       rawBody,
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest) {
     const session = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata || {};
 
-    // Parse items
+    // Parse items safely
     let items: any[] = [];
     try {
       items = metadata.items ? JSON.parse(metadata.items) : [];
@@ -102,9 +106,7 @@ export async function POST(req: NextRequest) {
         const htmlItems = items
           .map(
             (i: any) =>
-              `<li><strong>${i.name}</strong> — ${i.guests} guests — $${
-                i.price * i.guests
-              }</li>`
+              `<li><strong>${i.name}</strong> — ${i.guests} guests — $${i.price * i.guests}</li>`
           )
           .join("");
 
@@ -113,30 +115,22 @@ export async function POST(req: NextRequest) {
           to: customerEmail,
           subject: "Your Order Confirmation — Taste of Nepal",
           html: `
-              <h2>Thank you for your order, ${fullName}!</h2>
+            <h2>Thank you for your order, ${fullName}!</h2>
 
-              <p>Your payment has been successfully completed.</p>
+            <p>Your payment has been successfully completed.</p>
 
-              <h3>Order Summary</h3>
-              <ul>${htmlItems}</ul>
+            <h3>Order Summary</h3>
+            <ul>${htmlItems}</ul>
 
-              <p><strong>Total Paid:</strong> $${
-                (session.amount_total ?? 0) / 100
-              }</p>
+            <p><strong>Total Paid:</strong> $${(session.amount_total ?? 0) / 100}</p>
 
-              <h3>FAQ</h3>
+            <h3>FAQ</h3>
+            <p><strong>1. When will we contact you?</strong><br>Within 24 hours.</p>
+            <p><strong>2. Can you modify your order?</strong><br>Yes, reply to this email.</p>
+            <p><strong>3. Refunds?</strong><br>Depends on preparation stage. Contact us.</p>
 
-              <p><strong>1. When will I be contacted?</strong><br>
-              We will contact you within 24 hours.</p>
-
-              <p><strong>2. Can I modify my order?</strong><br>
-              Yes! Simply reply to this email.</p>
-
-              <p><strong>3. Refunds?</strong><br>
-              Refunds depend on preparation status. Contact support.</p>
-
-              <br>
-              <p>Thank you for choosing Taste of Nepal 🇳🇵</p>
+            <br>
+            <p>Thank you for choosing Taste of Nepal 🇳🇵</p>
           `,
         });
 
