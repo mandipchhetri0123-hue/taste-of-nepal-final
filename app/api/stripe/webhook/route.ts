@@ -6,12 +6,7 @@ import { Resend } from "resend";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Required for Stripe raw body
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+
 
 // Stripe Instance
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
