@@ -6,23 +6,22 @@ import { Resend } from "resend";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Stripe
+// Stripe Instance
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2025-10-29.clover",
 });
 
-// Resend (make sure RESEND_API_KEY is added in Vercel)
+// Resend Instance
 const resend = new Resend(process.env.RESEND_API_KEY as string);
-
 
 export async function POST(req: NextRequest) {
   const sig = req.headers.get("stripe-signature");
 
   if (!sig) {
-    console.error("❌ Missing stripe-signature header");
-    return new NextResponse("No signature", { status: 400 });
+    return new NextResponse("Missing stripe-signature", { status: 400 });
   }
 
+  // Stripe requires raw body (req.text)
   const rawBody = await req.text();
 
   let event: Stripe.Event;
@@ -34,27 +33,32 @@ export async function POST(req: NextRequest) {
       process.env.STRIPE_WEBHOOK_SECRET as string
     );
   } catch (err: any) {
-    console.error("❌ Webhook signature error:", err.message);
-    return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
+    console.error("❌ Webhook verification failed:", err.message);
+    return new NextResponse(`Webhook error: ${err.message}`, { status: 400 });
   }
 
-  console.log("🔔 Stripe webhook event:", event.type);
+  console.log("🔔 Stripe event received:", event.type);
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata || {};
 
-    // Parse items array
+    // Parse items
     let items: any[] = [];
     try {
-      items = metadata.items ? JSON.parse(metadata.items as string) : [];
+      items = metadata.items ? JSON.parse(metadata.items) : [];
     } catch (e) {
-      console.error("❌ Failed parsing items:", e);
+      console.error("❌ Metadata parse error:", e);
     }
 
-    const fullName = (metadata.fullName as string) || "";
+    const fullName = metadata.fullName || "";
     const [firstName, ...rest] = fullName.split(" ");
     const lastName = rest.join(" ");
+
+    const customerEmail =
+      metadata.email ||
+      session.customer_details?.email ||
+      "";
 
     const totalGuests = items.reduce(
       (sum, item) => sum + (item.guests || 0),
@@ -62,13 +66,9 @@ export async function POST(req: NextRequest) {
     );
 
     const packageName = items[0]?.name || "";
-    const customerEmail =
-      (metadata.email as string) ||
-      session.customer_details?.email ||
-      "";
 
     // ------------------------------------
-    // 1️⃣ SAVE ORDER TO FIRESTORE
+    // 1️⃣ SAVE ORDER INTO FIRESTORE
     // ------------------------------------
     try {
       await adminDB.collection("orders").add({
@@ -88,21 +88,23 @@ export async function POST(req: NextRequest) {
         createdAt: adminFieldValue.serverTimestamp(),
       });
 
-      console.log("✅ Order saved to Firestore");
-    } catch (error: any) {
-      console.error("❌ Error saving order:", error.message);
-      return new NextResponse("Firestore error", { status: 500 });
+      console.log("✅ Order successfully stored in Firestore");
+    } catch (err: any) {
+      console.error("❌ Firestore error:", err.message);
+      return new NextResponse("Database error", { status: 500 });
     }
 
     // ------------------------------------
-    // 2️⃣ SEND EMAIL USING RESEND
+    // 2️⃣ SEND EMAIL WITH RESEND
     // ------------------------------------
     if (customerEmail) {
       try {
         const htmlItems = items
           .map(
-            (i) =>
-              `<li><strong>${i.name}</strong> — ${i.guests} guests — $${i.price * i.guests}</li>`
+            (i: any) =>
+              `<li><strong>${i.name}</strong> — ${i.guests} guests — $${
+                i.price * i.guests
+              }</li>`
           )
           .join("");
 
@@ -111,33 +113,36 @@ export async function POST(req: NextRequest) {
           to: customerEmail,
           subject: "Your Order Confirmation — Taste of Nepal",
           html: `
-            <h2>Thank you for your order, ${fullName}!</h2>
+              <h2>Thank you for your order, ${fullName}!</h2>
 
-            <p>Your payment has been successfully completed.</p>
+              <p>Your payment has been successfully completed.</p>
 
-            <h3>Order Summary</h3>
-            <ul>${htmlItems}</ul>
+              <h3>Order Summary</h3>
+              <ul>${htmlItems}</ul>
 
-            <p><strong>Total Paid:</strong> $${(session.amount_total ?? 0) / 100}</p>
+              <p><strong>Total Paid:</strong> $${
+                (session.amount_total ?? 0) / 100
+              }</p>
 
-            <h3>FAQ</h3>
-            <p><strong>1. When will I be contacted?</strong><br>
-            Our team will contact you within 24 hours.</p>
+              <h3>FAQ</h3>
 
-            <p><strong>2. Can I modify my order?</strong><br>
-            Yes. Simply reply to this email.</p>
+              <p><strong>1. When will I be contacted?</strong><br>
+              We will contact you within 24 hours.</p>
 
-            <p><strong>3. Refunds?</strong><br>
-            Refund eligibility depends on preparation stage. Contact support.</p>
+              <p><strong>2. Can I modify my order?</strong><br>
+              Yes! Simply reply to this email.</p>
 
-            <br>
-            <p>Thank you for choosing Taste of Nepal! 🇳🇵</p>
+              <p><strong>3. Refunds?</strong><br>
+              Refunds depend on preparation status. Contact support.</p>
+
+              <br>
+              <p>Thank you for choosing Taste of Nepal 🇳🇵</p>
           `,
         });
 
-        console.log("📧 Email sent to:", customerEmail);
+        console.log("📨 Email sent to:", customerEmail);
       } catch (err: any) {
-        console.error("❌ Email send error:", err.message);
+        console.error("❌ Email error:", err.message);
       }
     }
   }
