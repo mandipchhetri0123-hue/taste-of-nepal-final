@@ -77,29 +77,74 @@ export default function AdminDatabase() {
   const [allOrders, setAllOrders] = useState<OrderDoc[]>([]);
   const [allUsers, setAllUsers] = useState<UserDoc[]>([]);
 
-  // Date range
+  // Date range helper
   const dateRange = (d: string) => ({
     start: Timestamp.fromDate(new Date(d + "T00:00:00")),
     end: Timestamp.fromDate(new Date(d + "T23:59:59")),
   });
 
   // ===========================================================
-  // 🔍 ORDER QUERY
+  // 🔍 ORDER QUERY (no composite index required)
   // ===========================================================
   const runOrderQuery = async () => {
-    const conditions: any[] = [];
+    let baseRef = collection(db, "orders");
+    let q: any = baseRef;
 
+    // Choose ONE main Firestore filter to avoid composite index:
     if (orderDate) {
       const { start, end } = dateRange(orderDate);
-      conditions.push(where("createdAt", ">=", start));
-      conditions.push(where("createdAt", "<=", end));
+      q = query(baseRef, where("createdAt", ">=", start), where("createdAt", "<=", end));
+    } else if (orderPhone.trim()) {
+      q = query(baseRef, where("phone", "==", orderPhone.trim()));
+    } else if (orderFirstName.trim()) {
+      q = query(baseRef, where("firstName", "==", orderFirstName.trim()));
+    } else if (orderLastName.trim()) {
+      q = query(baseRef, where("lastName", "==", orderLastName.trim()));
+    } else if (packageType !== "any") {
+      const pkg =
+        packageType === "standard"
+          ? "Standard Menu Package"
+          : packageType === "premium"
+          ? "Premium Menu Package"
+          : "Deluxe Menu Package";
+      q = query(baseRef, where("items.0.name", "==", pkg));
+    } else {
+      q = baseRef; // no Firestore filter, filter everything client-side
     }
-    if (orderFirstName.trim())
-      conditions.push(where("firstName", "==", orderFirstName.trim()));
-    if (orderLastName.trim())
-      conditions.push(where("lastName", "==", orderLastName.trim()));
-    if (orderPhone.trim())
-      conditions.push(where("phone", "==", orderPhone.trim()));
+
+    const snap = await getDocs(q);
+
+    let results: OrderDoc[] = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as any),
+    }));
+
+    // Now apply ALL filters combined in memory
+
+    // Date filter (if not already handled, but safe to re-check)
+    if (orderDate) {
+      const { start, end } = dateRange(orderDate);
+      results = results.filter((o) => {
+        if (!o.createdAt) return false;
+        const ts: Timestamp = o.createdAt;
+        return ts.toMillis() >= start.toMillis() && ts.toMillis() <= end.toMillis();
+      });
+    }
+
+    if (orderFirstName.trim()) {
+      const needle = orderFirstName.trim();
+      results = results.filter((o) => o.firstName === needle);
+    }
+
+    if (orderLastName.trim()) {
+      const needle = orderLastName.trim();
+      results = results.filter((o) => o.lastName === needle);
+    }
+
+    if (orderPhone.trim()) {
+      const needle = orderPhone.trim();
+      results = results.filter((o) => o.phone === needle);
+    }
 
     if (packageType !== "any") {
       const pkg =
@@ -109,21 +154,12 @@ export default function AdminDatabase() {
           ? "Premium Menu Package"
           : "Deluxe Menu Package";
 
-      conditions.push(where("items.0.name", "==", pkg));
+      results = results.filter(
+        (o) => o.items && o.items[0] && o.items[0].name === pkg
+      );
     }
 
-    const qRef =
-      conditions.length > 0
-        ? query(collection(db, "orders"), ...conditions)
-        : collection(db, "orders");
-
-    const snap = await getDocs(qRef);
-
-    let results: any[] = snap.docs.map((d) => ({
-      id: d.id,
-      ...(d.data() as any),
-    }));
-
+    // Guests filter (already client-side in your original code)
     if (guestsFilter.trim()) {
       const guestsNum = Number(guestsFilter);
 
@@ -135,49 +171,103 @@ export default function AdminDatabase() {
             0
           ),
         }))
-        .filter((o) =>
+        .filter((o: any) =>
           guestsMode === "exact"
             ? o.totalGuests === guestsNum
             : o.totalGuests >= guestsNum
         );
     }
 
-    setOrderResults(results as OrderDoc[]);
+    setOrderResults(results);
   };
 
   // ===========================================================
-  // 🔍 USER REGISTRATION QUERY
+  // 🔄 RESET ORDER FILTERS
+  // ===========================================================
+  const resetOrderFilters = () => {
+    setOrderDate("");
+    setOrderFirstName("");
+    setOrderLastName("");
+    setOrderPhone("");
+    setPackageType("any");
+    setGuestsFilter("");
+    setGuestsMode("exact");
+    setOrderResults([]);
+  };
+
+  // ===========================================================
+  // 🔍 USER REGISTRATION QUERY (no composite index required)
   // ===========================================================
   const runUserQuery = async () => {
-    const conditions: any[] = [];
+    let baseRef = collection(db, "users");
+    let q: any = baseRef;
 
+    // Choose ONE main Firestore filter:
     if (userDate) {
       const { start, end } = dateRange(userDate);
-      conditions.push(where("createdAt", ">=", start));
-      conditions.push(where("createdAt", "<=", end));
+      q = query(baseRef, where("createdAt", ">=", start), where("createdAt", "<=", end));
+    } else if (userPhone.trim()) {
+      q = query(baseRef, where("phone", "==", userPhone.trim()));
+    } else if (userEmail.trim()) {
+      q = query(baseRef, where("email", "==", userEmail.trim()));
+    } else if (userFirstName.trim()) {
+      q = query(baseRef, where("firstName", "==", userFirstName.trim()));
+    } else if (userLastName.trim()) {
+      q = query(baseRef, where("lastName", "==", userLastName.trim()));
+    } else {
+      q = baseRef;
     }
-    if (userFirstName.trim())
-      conditions.push(where("firstName", "==", userFirstName.trim()));
-    if (userLastName.trim())
-      conditions.push(where("lastName", "==", userLastName.trim()));
-    if (userPhone.trim())
-      conditions.push(where("phone", "==", userPhone.trim()));
-    if (userEmail.trim())
-      conditions.push(where("email", "==", userEmail.trim()));
 
-    const qRef =
-      conditions.length > 0
-        ? query(collection(db, "users"), ...conditions)
-        : collection(db, "users");
+    const snap = await getDocs(q);
 
-    const snap = await getDocs(qRef);
-
-    const results: UserDoc[] = snap.docs.map((d) => ({
+    let results: UserDoc[] = snap.docs.map((d) => ({
       id: d.id,
       ...(d.data() as any),
     }));
 
+    // Apply combined filters client-side
+    if (userDate) {
+      const { start, end } = dateRange(userDate);
+      results = results.filter((u) => {
+        if (!u.createdAt) return false;
+        const ts: Timestamp = u.createdAt;
+        return ts.toMillis() >= start.toMillis() && ts.toMillis() <= end.toMillis();
+      });
+    }
+
+    if (userFirstName.trim()) {
+      const needle = userFirstName.trim();
+      results = results.filter((u) => u.firstName === needle);
+    }
+
+    if (userLastName.trim()) {
+      const needle = userLastName.trim();
+      results = results.filter((u) => u.lastName === needle);
+    }
+
+    if (userPhone.trim()) {
+      const needle = userPhone.trim();
+      results = results.filter((u) => u.phone === needle);
+    }
+
+    if (userEmail.trim()) {
+      const needle = userEmail.trim();
+      results = results.filter((u) => u.email === needle);
+    }
+
     setUserResults(results);
+  };
+
+  // ===========================================================
+  // 🔄 RESET USER FILTERS
+  // ===========================================================
+  const resetUserFilters = () => {
+    setUserDate("");
+    setUserFirstName("");
+    setUserLastName("");
+    setUserPhone("");
+    setUserEmail("");
+    setUserResults([]);
   };
 
   // ===========================================================
@@ -341,6 +431,12 @@ export default function AdminDatabase() {
           >
             Run Order Query
           </button>
+          <button
+            onClick={resetOrderFilters}
+            className="bg-gray-600 text-white px-6 py-3 rounded ml-4"
+          >
+            Reset Filters
+          </button>
 
           {/* ORDER RESULTS */}
           {orderResults.map((o: any) => {
@@ -452,6 +548,12 @@ export default function AdminDatabase() {
             className="bg-blue-600 text-white px-6 py-3 rounded"
           >
             Run User Query
+          </button>
+          <button
+            onClick={resetUserFilters}
+            className="bg-gray-600 text-white px-6 py-3 rounded ml-4"
+          >
+            Reset Filters
           </button>
 
           {/* USER RESULTS */}

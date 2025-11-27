@@ -246,68 +246,149 @@ export default function Reports() {
   // EXPORT PDF
   // ======================
   const generatePDF = () => {
-    const doc = new jsPDF();
-    let y = 15;
-    doc.setFont("times", "normal");
-    doc.setFontSize(18);
-    doc.text("Taste of Nepal - Business Report", 10, y);
-    y += 15;
+  const doc = new jsPDF();
+  let y = 18;
 
-    // SUMMARY
-    if (summary) {
-      doc.setFontSize(14);
-      doc.text(`Summary: ${summary.label}`, 10, y);
-      y += 8;
+  // Safe font
+  doc.setFont("times", "normal");
 
-      doc.setFontSize(12);
-      doc.text(`Total Revenue: $${summary.totalRevenue.toFixed(2)}`, 10, y); y += 6;
-      doc.text(`Order Count: ${summary.orderCount}`, 10, y); y += 6;
-      doc.text(`Avg Order Value: $${summary.avgOrderValue.toFixed(2)}`, 10, y);
-      y += 10;
+  // -----------------------------------
+  // AUTO PAGE BREAK HELPER (with types)
+  // -----------------------------------
+  const addPageIfNeeded = (extraSpace: number = 10): void => {
+    if (y + extraSpace > 280) {
+      doc.addPage();
+      y = 15;
+      doc.setFont("times", "normal");
     }
-
-    // POPULAR ITEMS
-    if (popular) {
-      const addList = (title: string, list: PopularItem[]) => {
-        doc.setFontSize(13);
-        doc.text(title, 10, y);
-        y += 6;
-        doc.setFontSize(11);
-        list.forEach((item) => {
-          doc.text(`• ${item.name} (${item.count})`, 14, y);
-          y += 6;
-        });
-        y += 4;
-      };
-
-      doc.setFontSize(14);
-      doc.text("Popular Items", 10, y);
-      y += 8;
-
-      addList("Top Entrees", popular.entrees);
-      addList("Top Mains", popular.mains);
-      addList("Top Desserts", popular.desserts);
-    }
-
-    // MESSAGES
-    if (messages.length > 0) {
-      doc.setFontSize(14);
-      doc.text("Customer Messages", 10, y);
-      y += 10;
-
-      messages.forEach((m, i) => {
-        if (y > 270) {
-          doc.addPage();
-          y = 20;
-        }
-        doc.setFontSize(12);
-        doc.text(`${i + 1}. ${m.name} - ${m.email}`, 10, y); y += 6;
-        doc.text(`"${m.message.substring(0, 70)}..."`, 12, y); y += 10;
-      });
-    }
-
-    doc.save("TasteOfNepal_Report.pdf");
   };
+
+  // -----------------------------------
+  // POPULAR LIST HELPER (with types)
+  // -----------------------------------
+  const addList = (title: string, list: PopularItem[]): void => {
+    addPageIfNeeded(30);
+
+    doc.setFontSize(14);
+    doc.text(title, 10, y);
+    y += 7;
+
+    doc.setFontSize(12);
+
+    list.forEach((item: PopularItem) => {
+      addPageIfNeeded(10);
+      doc.text(`• ${item.name} (${item.count})`, 16, y);
+      y += 6;
+    });
+
+    y += 4; 
+  };
+
+  // -----------------------------------
+  // HEADER
+  // -----------------------------------
+  doc.setFontSize(20);
+  doc.text("Taste of Nepal - Business Report", 10, y);
+  y += 12;
+
+  doc.setFontSize(12);
+  doc.text(`Generated on: ${new Date().toLocaleString()}`, 10, y);
+  y += 10;
+
+  // -----------------------------------
+  // SUMMARY SECTION
+  // -----------------------------------
+  if (summary) {
+    addPageIfNeeded(40);
+
+    doc.setFontSize(16);
+    doc.text("Sales Summary", 10, y);
+    y += 10;
+
+    doc.setFontSize(14);
+    doc.text(`Range: ${summary.label}`, 10, y);
+    y += 8;
+
+    doc.setFontSize(12);
+    doc.text(`Total Revenue: $${summary.totalRevenue.toFixed(2)}`, 10, y);
+    y += 6;
+
+    doc.text(`Order Count: ${summary.orderCount}`, 10, y);
+    y += 6;
+
+    doc.text(`Average Order Value: $${summary.avgOrderValue.toFixed(2)}`, 10, y);
+    y += 12;
+  }
+
+  // -----------------------------------
+  // POPULAR ITEMS SECTION
+  // -----------------------------------
+  if (popular) {
+    addPageIfNeeded(60);
+
+    doc.setFontSize(16);
+    doc.text("Popular Items", 10, y);
+    y += 10;
+
+    addList("Top Entrees", popular.entrees);
+    addList("Top Mains", popular.mains);
+    addList("Top Desserts", popular.desserts);
+  }
+
+  // -----------------------------------
+  // CUSTOMER MESSAGES
+  // -----------------------------------
+  if (messages && messages.length > 0) {
+    addPageIfNeeded(80);
+
+    doc.setFontSize(16);
+    doc.text("Customer Messages", 10, y);
+    y += 10;
+
+    messages.forEach((m: any, i: number) => {
+      addPageIfNeeded(25);
+
+      doc.setFontSize(13);
+      doc.text(`${i + 1}. ${m.name || "Unknown Sender"}`, 10, y);
+      y += 6;
+
+      doc.setFontSize(11);
+      doc.text(`Email: ${m.email}`, 12, y);
+      y += 5;
+
+      if (m.subject) {
+        doc.text(`Subject: ${m.subject}`, 12, y);
+        y += 5;
+      }
+
+      // message wrap
+      const textLines: string[] = doc.splitTextToSize(m.message, 180);
+      textLines.forEach((line: string) => {
+        addPageIfNeeded(8);
+        doc.text(line, 14, y);
+        y += 5;
+      });
+
+      if (m.createdAt && m.createdAt.toDate) {
+        addPageIfNeeded(8);
+        doc.text(
+          `Sent: ${m.createdAt.toDate().toLocaleString()}`,
+          12,
+          y
+        );
+        y += 8;
+      }
+
+      y += 4; // spacing
+    });
+  }
+
+  // -----------------------------------
+  // SAVE PDF
+  // -----------------------------------
+  doc.save("TasteOfNepal_BusinessReport.pdf");
+};
+
 
   // ======================
   // UI
