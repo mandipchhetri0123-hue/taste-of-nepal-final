@@ -248,7 +248,7 @@ export default function Reports() {
   const generatePDF = () => {
     const doc = new jsPDF();
     let y = 15;
-
+    doc.setFont("times", "normal");
     doc.setFontSize(18);
     doc.text("Taste of Nepal - Business Report", 10, y);
     y += 15;
