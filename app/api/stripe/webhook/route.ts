@@ -14,12 +14,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
 // Resend (make sure RESEND_API_KEY is added in Vercel)
 const resend = new Resend(process.env.RESEND_API_KEY as string);
 
-// Required for Stripe raw body
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
 
 export async function POST(req: NextRequest) {
   const sig = req.headers.get("stripe-signature");
