@@ -13,6 +13,7 @@ import {
   orderBy,
   limit,
 } from "firebase/firestore";
+import jsPDF from "jspdf"; // ✅ ADDED FOR PDF EXPORT
 
 type OrderDoc = {
   id: string;
@@ -29,9 +30,6 @@ type PopularItem = {
 export default function Reports() {
   const db = getFirestore(app);
 
-  // ======================
-  // SUMMARY & POPULAR ITEMS STATE
-  // ======================
   const [summary, setSummary] = useState<{
     label: string;
     totalRevenue: number;
@@ -47,21 +45,15 @@ export default function Reports() {
 
   const [loadingSummary, setLoadingSummary] = useState(false);
 
-  // Custom date range (Option F)
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
 
-  // ======================
-  // MESSAGES STATE (Option H)
-  // ======================
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
 
   // ======================
-  // HELPERS – DATE RANGES
+  // DATE HANDLING
   // ======================
-
-  // For custom range (yyyy-mm-dd → Firestore Timestamp)
   const makeRangeFromStrings = (startStr: string, endStr: string) => {
     const [sy, sm, sd] = startStr.split("-").map(Number);
     const [ey, em, ed] = endStr.split("-").map(Number);
@@ -72,11 +64,9 @@ export default function Reports() {
     return { start, end };
   };
 
-  // For preset ranges: today / last 7 / last 30
   const getPresetRange = (preset: "today" | "7d" | "30d") => {
     const now = new Date();
 
-    // End of today
     const endDate = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -85,6 +75,7 @@ export default function Reports() {
       59,
       59
     );
+
     let startDate = new Date(
       now.getFullYear(),
       now.getMonth(),
@@ -95,11 +86,9 @@ export default function Reports() {
     );
 
     if (preset === "7d") {
-      // last 7 days including today → 6 days back
       startDate = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
     }
     if (preset === "30d") {
-      // last 30 days including today → 29 days back
       startDate = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000);
     }
 
@@ -110,8 +99,7 @@ export default function Reports() {
   };
 
   // ======================
-  // CORE COMPUTE FUNCTION
-  // (Used by A + C + F)
+  // COMPUTATION
   // ======================
   const computeFromOrders = (orders: OrderDoc[], label: string) => {
     let totalRevenue = 0;
@@ -167,7 +155,7 @@ export default function Reports() {
   };
 
   // ======================
-  // PRESET SUMMARY (A)
+  // PRESET SUMMARY
   // ======================
   const runPresetSummary = async (preset: "today" | "7d" | "30d") => {
     setLoadingSummary(true);
@@ -192,8 +180,7 @@ export default function Reports() {
           : "Last 30 Days";
 
       computeFromOrders(orders, label);
-    } catch (err) {
-      console.error(err);
+    } catch {
       alert("Failed to load sales summary.");
     } finally {
       setLoadingSummary(false);
@@ -201,7 +188,7 @@ export default function Reports() {
   };
 
   // ======================
-  // CUSTOM DATE RANGE REPORT (F)
+  // CUSTOM RANGE
   // ======================
   const runCustomRangeReport = async () => {
     if (!customStart || !customEnd) {
@@ -223,10 +210,8 @@ export default function Reports() {
       const orders: OrderDoc[] = [];
       snap.forEach((d) => orders.push({ id: d.id, ...(d.data() as any) }));
 
-      const label = `${customStart} → ${customEnd}`;
-      computeFromOrders(orders, label);
-    } catch (err) {
-      console.error(err);
+      computeFromOrders(orders, `${customStart} → ${customEnd}`);
+    } catch {
       alert("Failed to load custom range report.");
     } finally {
       setLoadingSummary(false);
@@ -234,7 +219,7 @@ export default function Reports() {
   };
 
   // ======================
-  // MESSAGES REPORT (H)
+  // MESSAGES
   // ======================
   const loadMessages = async () => {
     setLoadingMessages(true);
@@ -250,25 +235,97 @@ export default function Reports() {
       snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
 
       setMessages(list);
-    } catch (err) {
-      console.error(err);
+    } catch {
       alert("Failed to load messages.");
     } finally {
       setLoadingMessages(false);
     }
   };
 
+  // ======================
+  // EXPORT PDF
+  // ======================
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    let y = 15;
+
+    doc.setFontSize(18);
+    doc.text("Taste of Nepal - Business Report", 10, y);
+    y += 15;
+
+    // SUMMARY
+    if (summary) {
+      doc.setFontSize(14);
+      doc.text(`Summary: ${summary.label}`, 10, y);
+      y += 8;
+
+      doc.setFontSize(12);
+      doc.text(`Total Revenue: $${summary.totalRevenue.toFixed(2)}`, 10, y); y += 6;
+      doc.text(`Order Count: ${summary.orderCount}`, 10, y); y += 6;
+      doc.text(`Avg Order Value: $${summary.avgOrderValue.toFixed(2)}`, 10, y);
+      y += 10;
+    }
+
+    // POPULAR ITEMS
+    if (popular) {
+      const addList = (title: string, list: PopularItem[]) => {
+        doc.setFontSize(13);
+        doc.text(title, 10, y);
+        y += 6;
+        doc.setFontSize(11);
+        list.forEach((item) => {
+          doc.text(`• ${item.name} (${item.count})`, 14, y);
+          y += 6;
+        });
+        y += 4;
+      };
+
+      doc.setFontSize(14);
+      doc.text("Popular Items", 10, y);
+      y += 8;
+
+      addList("Top Entrees", popular.entrees);
+      addList("Top Mains", popular.mains);
+      addList("Top Desserts", popular.desserts);
+    }
+
+    // MESSAGES
+    if (messages.length > 0) {
+      doc.setFontSize(14);
+      doc.text("Customer Messages", 10, y);
+      y += 10;
+
+      messages.forEach((m, i) => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.setFontSize(12);
+        doc.text(`${i + 1}. ${m.name} - ${m.email}`, 10, y); y += 6;
+        doc.text(`"${m.message.substring(0, 70)}..."`, 12, y); y += 10;
+      });
+    }
+
+    doc.save("TasteOfNepal_Report.pdf");
+  };
+
+  // ======================
+  // UI
+  // ======================
   return (
     <AdminRoute>
       <div className="p-10 space-y-10">
         <h1 className="text-3xl font-bold mb-2">Business Reports</h1>
-        <p className="text-gray-600 mb-4">
-          View sales performance, popular items and customer messages.
-        </p>
 
-        {/* ======================================= */}
-        {/* SECTION A – SALES SUMMARY (PRESET)      */}
-        {/* ======================================= */}
+        {/* PDF BUTTON */}
+        <button
+          onClick={generatePDF}
+          className="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 mb-6"
+        >
+          Download PDF Report
+        </button>
+
+        {/* SECTION A — PRESET SUMMARY */}
         <section className="bg-white p-6 rounded shadow">
           <h2 className="text-2xl font-semibold mb-4">
             Sales Summary (Quick Filters)
@@ -315,14 +372,14 @@ export default function Reports() {
                     ${summary.totalRevenue.toFixed(2)}
                   </p>
                 </div>
+
                 <div className="border rounded p-4 bg-gray-50">
                   <h3 className="font-semibold text-gray-700 mb-1">
                     Number of Orders
                   </h3>
-                  <p className="text-2xl font-bold">
-                    {summary.orderCount}
-                  </p>
+                  <p className="text-2xl font-bold">{summary.orderCount}</p>
                 </div>
+
                 <div className="border rounded p-4 bg-gray-50">
                   <h3 className="font-semibold text-gray-700 mb-1">
                     Avg. Order Value
@@ -336,9 +393,7 @@ export default function Reports() {
           )}
         </section>
 
-        {/* ======================================= */}
-        {/* SECTION F – CUSTOM DATE RANGE REPORT    */}
-        {/* ======================================= */}
+        {/* CUSTOM DATE RANGE */}
         <section className="bg-white p-6 rounded shadow">
           <h2 className="text-2xl font-semibold mb-4">
             Custom Date Range Report
@@ -346,9 +401,7 @@ export default function Reports() {
 
           <div className="grid md:grid-cols-3 gap-4 items-end mb-4">
             <div>
-              <label className="block font-semibold mb-1">
-                Start Date
-              </label>
+              <label className="block font-semibold mb-1">Start Date</label>
               <input
                 type="date"
                 className="border rounded p-2 w-full"
@@ -356,10 +409,9 @@ export default function Reports() {
                 onChange={(e) => setCustomStart(e.target.value)}
               />
             </div>
+
             <div>
-              <label className="block font-semibold mb-1">
-                End Date
-              </label>
+              <label className="block font-semibold mb-1">End Date</label>
               <input
                 type="date"
                 className="border rounded p-2 w-full"
@@ -367,6 +419,7 @@ export default function Reports() {
                 onChange={(e) => setCustomEnd(e.target.value)}
               />
             </div>
+
             <div>
               <button
                 onClick={runCustomRangeReport}
@@ -377,16 +430,9 @@ export default function Reports() {
               </button>
             </div>
           </div>
-
-          <p className="text-sm text-gray-500">
-            This uses the same calculations as the quick summary, but for the
-            exact date range you choose.
-          </p>
         </section>
 
-        {/* ======================================= */}
-        {/* SECTION C – POPULAR ITEMS              */}
-        {/* ======================================= */}
+        {/* POPULAR ITEMS */}
         <section className="bg-white p-6 rounded shadow">
           <h2 className="text-2xl font-semibold mb-4">
             Popular Items (Current Range)
@@ -404,14 +450,11 @@ export default function Reports() {
               {/* Entrees */}
               <div>
                 <h3 className="font-semibold mb-2">Top Entrees</h3>
-                {popular.entrees.length === 0 && (
-                  <p className="text-gray-500 text-sm">No data.</p>
-                )}
                 <ul className="space-y-1 text-sm">
                   {popular.entrees.map((e) => (
                     <li key={e.name}>
-                      {e.name} — <span className="font-semibold">{e.count}</span>{" "}
-                      orders
+                      {e.name} —{" "}
+                      <span className="font-semibold">{e.count}</span> orders
                     </li>
                   ))}
                 </ul>
@@ -420,14 +463,11 @@ export default function Reports() {
               {/* Mains */}
               <div>
                 <h3 className="font-semibold mb-2">Top Mains</h3>
-                {popular.mains.length === 0 && (
-                  <p className="text-gray-500 text-sm">No data.</p>
-                )}
                 <ul className="space-y-1 text-sm">
                   {popular.mains.map((m) => (
                     <li key={m.name}>
-                      {m.name} — <span className="font-semibold">{m.count}</span>{" "}
-                      orders
+                      {m.name} —{" "}
+                      <span className="font-semibold">{m.count}</span> orders
                     </li>
                   ))}
                 </ul>
@@ -436,14 +476,11 @@ export default function Reports() {
               {/* Desserts */}
               <div>
                 <h3 className="font-semibold mb-2">Top Desserts</h3>
-                {popular.desserts.length === 0 && (
-                  <p className="text-gray-500 text-sm">No data.</p>
-                )}
                 <ul className="space-y-1 text-sm">
                   {popular.desserts.map((d) => (
                     <li key={d.name}>
-                      {d.name} — <span className="font-semibold">{d.count}</span>{" "}
-                      orders
+                      {d.name} —{" "}
+                      <span className="font-semibold">{d.count}</span> orders
                     </li>
                   ))}
                 </ul>
@@ -452,9 +489,7 @@ export default function Reports() {
           )}
         </section>
 
-        {/* ======================================= */}
-        {/* SECTION H – CUSTOMER MESSAGES          */}
-        {/* ======================================= */}
+        {/* CUSTOMER MESSAGES */}
         <section className="bg-white p-6 rounded shadow">
           <h2 className="text-2xl font-semibold mb-4">
             Customer Messages (Last 20)
@@ -474,10 +509,7 @@ export default function Reports() {
 
           <div className="space-y-4">
             {messages.map((m) => (
-              <div
-                key={m.id}
-                className="border rounded p-4 bg-gray-50 text-sm"
-              >
+              <div key={m.id} className="border rounded p-4 bg-gray-50 text-sm">
                 <h3 className="font-semibold text-lg mb-1">
                   {m.name || "Unknown Sender"}
                 </h3>

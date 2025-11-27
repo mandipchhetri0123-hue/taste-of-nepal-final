@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
           .join("");
 
         await resend.emails.send({
-          from: "Taste of Nepal <orders@resend.dev>", // ✔ No domain verification required
+          from: "Taste of Nepal <orders@tasteofnepal.xyz>",
           to: customerEmail,
           subject: "Your Order Confirmation — Taste of Nepal",
           html: `
