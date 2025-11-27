@@ -7,8 +7,11 @@ import { db, app } from "@/lib/firebase";
 import Link from "next/link";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// E.164 phone format, e.g. +61412345678 (8–15 digits total)
+// E.164 phone format
 const phoneRegex = /^\+[1-9]\d{7,14}$/;
+
+// Strong password regex: 1 uppercase, 1 number, 1 symbol, min 8 chars
+const strongPassword = /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-={}[\]|:;"'<>,.?/]).{8,}$/;
 
 export default function RegisterPage() {
   const auth = getAuth(app);
@@ -41,17 +44,17 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
 
-    // Basic required checks
+    // Validation
     if (!form.firstName.trim() || !form.lastName.trim()) {
       return setError("Please enter your first and last name.");
     }
 
-    if (!form.email.trim() || !emailRegex.test(form.email.trim())) {
-      return setError("Please enter a valid email address (e.g. user@example.com).");
+    if (!emailRegex.test(form.email.trim())) {
+      return setError("Please enter a valid email address.");
     }
 
-    if (!form.phone.trim() || !phoneRegex.test(form.phone.trim())) {
-      return setError("Please enter a valid phone number in international format, e.g. +61412345678.");
+    if (!phoneRegex.test(form.phone.trim())) {
+      return setError("Please enter a valid phone number (e.g. +61412345678).");
     }
 
     if (!form.gender) {
@@ -59,21 +62,26 @@ export default function RegisterPage() {
     }
 
     if (!form.dob) {
-      return setError("Please select your date of birth.");
+      return setError("Please insert your date of birth.");
     }
 
-    if (form.password.length < 6) {
-      return setError("Password must be at least 6 characters long.");
+    if (!strongPassword.test(form.password)) {
+      return setError(
+        "Password must be at least 8 characters, include 1 uppercase letter, 1 number, and 1 symbol."
+      );
     }
 
     if (form.password !== form.confirmPassword) {
-      return setError("Passwords don't match.");
+      return setError("Passwords do not match.");
     }
 
     if (!form.agree) {
-      return setError("You must agree to Terms & Conditions.");
+      return setError("You must agree to the Terms & Conditions.");
     }
 
+    // ---------------------------
+    // CREATE USER
+    // ---------------------------
     try {
       setLoading(true);
 
@@ -107,13 +115,12 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-        <h1 className="text-3xl font-bold mb-4 text-center">
-          Create Account
-        </h1>
+        <h1 className="text-3xl font-bold mb-4 text-center">Create Account</h1>
 
         {error && <p className="text-red-500 text-center mb-4">{error}</p>}
 
         <form onSubmit={handleRegister} className="space-y-4">
+
           {/* Full Name */}
           <div className="grid grid-cols-2 gap-3">
             <input
@@ -164,34 +171,37 @@ export default function RegisterPage() {
             onChange={handleChange}
             required
           >
-            <option value="">Gender</option>
+            <option value="">Select Gender</option>
             <option>Male</option>
             <option>Female</option>
             <option>Other</option>
           </select>
 
           {/* DOB */}
-          <input
-            className="border p-2 rounded w-full"
-            name="dob"
-            placeholder="Date of Birth"
-            type="date"
-            value={form.dob}
-            onChange={handleChange}
-            required
-          />
+          <div>
+            <label className="text-sm text-gray-600">Insert your date of birth:</label>
+            <input
+              className="border p-2 rounded w-full mt-1"
+              name="dob"
+              type="date"
+              value={form.dob}
+              onChange={handleChange}
+              required
+            />
+          </div>
 
           {/* Password */}
           <input
             className="border p-2 rounded w-full"
             name="password"
             type="password"
-            placeholder="Password (min 6 characters)"
+            placeholder="Password (8+ chars, 1 uppercase, 1 number, 1 symbol)"
             value={form.password}
             onChange={handleChange}
             required
           />
 
+          {/* Confirm Password */}
           <input
             className="border p-2 rounded w-full"
             name="confirmPassword"
@@ -209,10 +219,11 @@ export default function RegisterPage() {
               name="agree"
               checked={form.agree}
               onChange={handleChange}
-            />{" "}
+            />
             I agree to Terms & Conditions
           </label>
 
+          {/* Submit */}
           <button
             className="w-full bg-red-600 text-white py-3 rounded hover:bg-red-700"
             type="submit"
