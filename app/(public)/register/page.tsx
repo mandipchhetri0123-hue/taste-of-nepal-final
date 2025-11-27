@@ -174,6 +174,7 @@ export default function RegisterPage() {
           <input
             className="border p-2 rounded w-full"
             name="dob"
+            placeholder="Date of Birth"
             type="date"
             value={form.dob}
             onChange={handleChange}
