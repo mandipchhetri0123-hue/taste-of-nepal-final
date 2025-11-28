@@ -85,7 +85,7 @@ export default function MenuPage() {
       guests: guests
     });
 
-    alert(`✅ Added ${guests} guests for ${selectedPackage.name}!`);
+    alert(`✅ Added to cart! Go to cart for payment.`);
 
     // Reset
     setSelectedPackage(null);
