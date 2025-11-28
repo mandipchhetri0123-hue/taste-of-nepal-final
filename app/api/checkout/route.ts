@@ -5,18 +5,23 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2025-10-29.clover",
 });
 
-
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
+    // 👇 Detect environment dynamically (THIS FIXES YOUR REDIRECT BUG)
+    const origin =
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      req.headers.get("origin") ||
+      "http://localhost:3000";
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
 
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/checkout`,
+      // 👇 FIXED — dynamic base URL
+      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/checkout`,
 
       customer_email: body.customer.email,
 
@@ -26,7 +31,7 @@ export async function POST(req: NextRequest) {
         phone: body.customer.phone,
         address: body.customer.address,
         note: body.customer.note ?? "",
-        email: body.customer.email,     // <-- IMPORTANT FIX
+        email: body.customer.email,
         items: JSON.stringify(body.items),
       },
 

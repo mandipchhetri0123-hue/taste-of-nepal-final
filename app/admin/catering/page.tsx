@@ -74,8 +74,8 @@ export default function CateringAdminPage() {
     });
   };
 
-  // Update options list
-  const updateOptions = (category: string, newList: string[]) => {
+  // Update options list (object format)
+  const updateOptions = (category: string, newList: any[]) => {
     setPackages({
       ...packages,
       [active]: {
@@ -150,7 +150,7 @@ export default function CateringAdminPage() {
         ))}
       </div>
 
-      {/* Options Editor */}
+      {/* Options Editor (Image + Name + Description) */}
       <div className="bg-white p-6 rounded shadow mb-6">
         <h2 className="text-xl font-bold mb-4">Menu Items</h2>
 
@@ -158,19 +158,46 @@ export default function CateringAdminPage() {
           <div key={cat} className="mb-6">
             <h3 className="font-semibold text-lg mb-2">{cat.toUpperCase()}</h3>
 
-            {pkg.options[cat].map((item: string, index: number) => (
-              <div key={index} className="flex gap-2 mb-2">
+            {pkg.options[cat].map((item: any, index: number) => (
+              <div
+                key={index}
+                className="border p-4 rounded mb-3 bg-gray-50 space-y-2"
+              >
+                <label className="font-semibold block">Item Name</label>
                 <input
-                  className="border p-2 rounded flex-1"
-                  value={item}
+                  className="border p-2 rounded w-full"
+                  value={item.name}
                   onChange={(e) => {
-                    const newList = [...pkg.options[cat]];
-                    newList[index] = e.target.value;
-                    updateOptions(cat, newList);
+                    const updated = [...pkg.options[cat]];
+                    updated[index].name = e.target.value;
+                    updateOptions(cat, updated);
                   }}
                 />
+
+                <label className="font-semibold block">Image URL</label>
+                <input
+                  className="border p-2 rounded w-full"
+                  value={item.image}
+                  onChange={(e) => {
+                    const updated = [...pkg.options[cat]];
+                    updated[index].image = e.target.value;
+                    updateOptions(cat, updated);
+                  }}
+                />
+
+                <label className="font-semibold block">Description</label>
+                <input
+                  className="border p-2 rounded w-full"
+                  value={item.description}
+                  onChange={(e) => {
+                    const updated = [...pkg.options[cat]];
+                    updated[index].description = e.target.value;
+                    updateOptions(cat, updated);
+                  }}
+                />
+
                 <button
-                  className="bg-red-500 text-white px-4 rounded"
+                  className="bg-red-600 text-white px-4 py-2 rounded mt-2"
                   onClick={() => {
                     const newList = pkg.options[cat].filter(
                       (_: any, i: number) => i !== index
@@ -178,7 +205,7 @@ export default function CateringAdminPage() {
                     updateOptions(cat, newList);
                   }}
                 >
-                  Delete
+                  Delete Item
                 </button>
               </div>
             ))}
@@ -187,10 +214,17 @@ export default function CateringAdminPage() {
             <button
               className="mt-2 bg-green-600 text-white px-4 py-2 rounded"
               onClick={() =>
-                updateOptions(cat, [...pkg.options[cat], "New Item"])
+                updateOptions(cat, [
+                  ...pkg.options[cat],
+                  {
+                    name: "New Item",
+                    image: "https://placehold.co/150",
+                    description: "Item description",
+                  },
+                ])
               }
             >
-              Add Item
+              Add New Item
             </button>
           </div>
         ))}
