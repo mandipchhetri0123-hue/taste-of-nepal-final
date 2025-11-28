@@ -22,7 +22,6 @@ export default function MenuPage() {
 
   const [guests, setGuests] = useState<number>(15);
 
-  // Load Firestore Data
   useEffect(() => {
     async function load() {
       const std = await getDoc(doc(db, "cateringPackages", "standard"));
@@ -44,7 +43,6 @@ export default function MenuPage() {
 
   const pkg = packages[activeTab];
 
-  // Handle checkbox click
   const handleCheckbox = (category: 'entrees' | 'mains' | 'desserts', item: string, limit: number) => {
     setSelectedItems((prev) => {
       const selectedList = prev[category];
@@ -68,7 +66,6 @@ export default function MenuPage() {
     });
   };
 
-  // Add to Cart
   const handleAddToCart = () => {
     if (!selectedPackage) return;
 
@@ -87,17 +84,15 @@ export default function MenuPage() {
 
     alert(`✅ Added to cart! Go to cart for payment.`);
 
-    // Reset
     setSelectedPackage(null);
     setSelectedItems({ entrees: [], mains: [], desserts: [], specialRequest: '' });
     setGuests(selectedPackage.minGuests);
   };
 
-
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
 
-      {/* 👇 FEATURED DISHES SECTION */}
+      {/* FEATURED SECTION */}
       <section className="max-w-6xl mx-auto px-4 pt-12 pb-16">
         <h2 className="text-4xl font-heading font-bold text-center mb-10">
           Our Signature Catering Dishes
@@ -105,7 +100,6 @@ export default function MenuPage() {
 
         <div className="grid md:grid-cols-3 gap-10">
 
-          {/* Fried Chicken */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
             <img
               src="https://img.freepik.com/premium-photo/deep-fried-chicken-nepali-snacks-with-chutney_723123-239.jpg"
@@ -118,7 +112,6 @@ export default function MenuPage() {
             </div>
           </div>
 
-          {/* Chicken Choila */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
             <img
               src="https://junifoods.com/wp-content/uploads/2023/04/easy-chicken-choila-1024x693.png"
@@ -131,7 +124,6 @@ export default function MenuPage() {
             </div>
           </div>
 
-          {/* Goat Curry */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
             <img
               src="https://boondockingrecipes.com/wp-content/uploads/2025/03/15.-Nepal-Slow-Cooker-Goat-Curry-Recipe-2-768x768.jpg"
@@ -146,7 +138,6 @@ export default function MenuPage() {
 
         </div>
       </section>
-
 
       <h1 className="text-4xl font-bold text-center mb-6">Our Catering Menu</h1>
       <p className="text-center text-gray-600 mb-10">
@@ -185,7 +176,7 @@ export default function MenuPage() {
         </button>
       </div>
 
-      {/* Customizer Modal */}
+      {/* Modal */}
       {selectedPackage && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 px-4">
           <div className="bg-white max-w-3xl w-full rounded-lg shadow-lg p-8 overflow-y-auto max-h-[90vh]">
@@ -214,12 +205,12 @@ export default function MenuPage() {
                   {cat.toUpperCase()} (Select {selectedPackage.limits[cat]})
                 </h3>
 
-                {/* ⭐ NEW FORMAT — IMAGE + TITLE + DESCRIPTION */}
-                <div className="grid grid-cols-2 gap-3">
+                {/* ⭐ FIXED RESPONSIVE LIST */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {selectedPackage.options[cat].map((item: any, index: number) => (
                     <label
                       key={`${cat}-${index}-${item.name}`}
-                      className="flex space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
+                      className="flex flex-col sm:flex-row gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
                     >
                       <input
                         type="checkbox"
@@ -227,17 +218,20 @@ export default function MenuPage() {
                         onChange={() =>
                           handleCheckbox(cat, item.name, selectedPackage.limits[cat])
                         }
+                        className="mt-1"
                       />
 
                       <img
                         src={item.image}
                         alt={item.name}
-                        className="w-20 h-20 object-cover rounded"
+                        className="w-24 h-24 sm:w-20 sm:h-20 object-cover rounded"
                       />
 
-                      <div>
+                      <div className="flex-1">
                         <p className="font-semibold">{item.name}</p>
-                        <p className="text-gray-600 text-sm">{item.description}</p>
+                        <p className="text-gray-600 text-sm leading-snug">
+                          {item.description}
+                        </p>
                       </div>
                     </label>
                   ))}
@@ -246,7 +240,7 @@ export default function MenuPage() {
               </div>
             ))}
 
-            {/* Special requests */}
+            {/* Special Requests */}
             <div className="mb-6">
               <label className="block text-lg font-semibold mb-2">Special Requests</label>
               <textarea
