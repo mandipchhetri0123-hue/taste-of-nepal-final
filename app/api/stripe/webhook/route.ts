@@ -6,14 +6,12 @@ import { Resend } from "resend";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-
-
-// Stripe Instance
+// Stripe instance
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: "2025-10-29.clover",
 });
 
-// Resend Instance
+// Resend instance
 const resend = new Resend(process.env.RESEND_API_KEY as string);
 
 export async function POST(req: NextRequest) {
@@ -25,6 +23,7 @@ export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
   let event: Stripe.Event;
+
   try {
     event = stripe.webhooks.constructEvent(
       rawBody,
@@ -55,9 +54,7 @@ export async function POST(req: NextRequest) {
     const lastName = rest.join(" ");
 
     const customerEmail =
-      metadata.email ||
-      session.customer_details?.email ||
-      "";
+      metadata.email || session.customer_details?.email || "";
 
     const totalGuests = items.reduce(
       (sum, item) => sum + (item.guests || 0),
@@ -94,7 +91,68 @@ export async function POST(req: NextRequest) {
     }
 
     // ------------------------------------
-    // 2️⃣ SEND EMAIL WITH RESEND
+    // 2️⃣ REDUCE GLOBAL STOCK: foodStock/{dishName}
+    // ------------------------------------
+    try {
+      for (const orderItem of items) {
+        const selections = orderItem.selections as
+          | { entrees: string[]; mains: string[]; desserts: string[] }
+          | undefined;
+        const guests = orderItem.guests || 0;
+
+        if (!selections || guests <= 0) {
+          console.log("⚠️ Skipping malformed item for stock:", orderItem);
+          continue;
+        }
+
+        const categories: Array<"entrees" | "mains" | "desserts"> = [
+          "entrees",
+          "mains",
+          "desserts",
+        ];
+
+        for (const category of categories) {
+          const selectedNames = selections[category] || [];
+
+          for (const dishName of selectedNames) {
+            // doc id in foodStock is the dish name (e.g., "Pakoda")
+            const stockRef =
+              adminDB
+                .collection("foodStock")
+                .doc(dishName) as FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>;
+
+            await adminDB.runTransaction(
+              async (transaction: FirebaseFirestore.Transaction) => {
+                const snap = await transaction.get(stockRef);
+
+                if (!snap.exists) {
+                  console.warn("⚠️ foodStock doc not found for:", dishName);
+                  return;
+                }
+
+                const data = snap.data() as any;
+                const currentStock =
+                  typeof data.stock === "number" ? data.stock : 0;
+
+                const newStock = Math.max(currentStock - guests, 0);
+
+                transaction.update(stockRef, { stock: newStock });
+
+                console.log(
+                  `🟢 Global stock updated: ${dishName} (${currentStock} → ${newStock}) | guests: ${guests}`
+                );
+              }
+            );
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("❌ Global stock update error:", err.message);
+      // Do not fail the webhook – payment + order already processed
+    }
+
+    // ------------------------------------
+    // 3️⃣ SEND EMAIL WITH RESEND
     // ------------------------------------
     if (customerEmail) {
       try {
@@ -118,11 +176,6 @@ export async function POST(req: NextRequest) {
             <ul>${htmlItems}</ul>
 
             <p><strong>Total Paid:</strong> $${(session.amount_total ?? 0) / 100}</p>
-
-            <h3>FAQ</h3>
-            <p><strong>1. When will we contact you?</strong><br>Within 24 hours.</p>
-            <p><strong>2. Can you modify your order?</strong><br>Yes, reply to this email.</p>
-            <p><strong>3. Refunds?</strong><br>Depends on preparation stage. Contact us.</p>
 
             <br>
             <p>Thank you for choosing Taste of Nepal 🇳🇵</p>

@@ -1,63 +1,105 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
-import { app } from '@/firebase/config';
 import { useCart } from '@/context/CartContext';
 
+type PackageKey = 'standard' | 'premium' | 'deluxe';
+
+type MenuItem = {
+  name: string;
+  description: string;
+  image: string;
+  price?: number;
+  stock?: number; // from global foodStock
+};
+
+type PackageData = {
+  name: string;
+  price: number; // per person
+  minGuests: number;
+  limits: {
+    entrees: number;
+    mains: number;
+    desserts: number;
+  };
+  options: {
+    entrees: MenuItem[];
+    mains: MenuItem[];
+    desserts: MenuItem[];
+  };
+};
+
+type PackagesState = Record<PackageKey, PackageData>;
+
 export default function MenuPage() {
-  const db = getFirestore(app);
   const { addToCart } = useCart();
 
-  const [packages, setPackages] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'standard' | 'premium' | 'deluxe'>('standard');
-  const [selectedPackage, setSelectedPackage] = useState<any>(null);
+  const [packages, setPackages] = useState<PackagesState | null>(null);
+  const [activeTab, setActiveTab] = useState<PackageKey>('standard');
+  const [selectedPackage, setSelectedPackage] = useState<PackageData | null>(null);
 
   const [selectedItems, setSelectedItems] = useState({
     entrees: [] as string[],
     mains: [] as string[],
     desserts: [] as string[],
-    specialRequest: ''
+    specialRequest: '',
   });
 
   const [guests, setGuests] = useState<number>(15);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
-      const std = await getDoc(doc(db, "cateringPackages", "standard"));
-      const prem = await getDoc(doc(db, "cateringPackages", "premium"));
-      const del = await getDoc(doc(db, "cateringPackages", "deluxe"));
+      try {
+        const res = await fetch('/api/catering/list');
+        const json = await res.json();
 
-      setPackages({
-        standard: std.data(),
-        premium: prem.data(),
-        deluxe: del.data()
-      });
+        if (json.error) {
+          console.error('Catering load error:', json.error);
+          setError(json.error);
+        } else {
+          setPackages(json as PackagesState);
+        }
+      } catch (e: any) {
+        console.error(e);
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
 
-  if (!packages) {
-    return <div className="p-10 text-center text-xl">Loading Catering Menu…</div>;
+  if (loading || !packages) {
+    return (
+      <div className="p-10 text-center text-xl">
+        {error ? `Error loading menu: ${error}` : 'Loading Catering Menu…'}
+      </div>
+    );
   }
 
   const pkg = packages[activeTab];
 
-  const handleCheckbox = (category: 'entrees' | 'mains' | 'desserts', item: string, limit: number) => {
+  const handleCheckbox = (
+    category: 'entrees' | 'mains' | 'desserts',
+    itemName: string,
+    limit: number
+  ) => {
     setSelectedItems((prev) => {
       const selectedList = prev[category];
 
-      if (selectedList.includes(item)) {
+      if (selectedList.includes(itemName)) {
         return {
           ...prev,
-          [category]: selectedList.filter((i) => i !== item)
+          [category]: selectedList.filter((i) => i !== itemName),
         };
       }
 
       if (selectedList.length < limit) {
         return {
           ...prev,
-          [category]: [...selectedList, item]
+          [category]: [...selectedList, itemName],
         };
       }
 
@@ -74,12 +116,35 @@ export default function MenuPage() {
       return;
     }
 
+    // STOCK VALIDATION
+    const insufficient: string[] = [];
+
+    (['entrees', 'mains', 'desserts'] as const).forEach((cat) => {
+      selectedItems[cat].forEach((name) => {
+        const opt = selectedPackage.options[cat].find((o) => o.name === name);
+        const available = opt?.stock ?? 0;
+        if (available < guests) {
+          insufficient.push(`${name} (only ${available} portions available)`);
+        }
+      });
+    });
+
+    if (insufficient.length > 0) {
+      alert(
+        `⚠️ Not enough stock for:\n\n${insufficient.join(
+          '\n'
+        )}\n\nPlease reduce number of guests or change selected dishes.`
+      );
+      return;
+    }
+
     addToCart({
-      id: selectedPackage.name + "-" + Date.now(),
+      id: selectedPackage.name + '-' + Date.now(),
+      packageId: activeTab,
       name: selectedPackage.name,
       price: selectedPackage.price,
       selections: selectedItems,
-      guests: guests
+      guests: guests,
     });
 
     alert(`✅ Added to cart! Go to cart for payment.`);
@@ -91,7 +156,6 @@ export default function MenuPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
-
       {/* FEATURED SECTION */}
       <section className="max-w-6xl mx-auto px-4 pt-12 pb-16">
         <h2 className="text-4xl font-heading font-bold text-center mb-10">
@@ -99,7 +163,6 @@ export default function MenuPage() {
         </h2>
 
         <div className="grid md:grid-cols-3 gap-10">
-
           <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
             <img
               src="https://img.freepik.com/premium-photo/deep-fried-chicken-nepali-snacks-with-chutney_723123-239.jpg"
@@ -135,7 +198,6 @@ export default function MenuPage() {
               <p className="text-gray-600">Slow-cooked tender goat in rich spices.</p>
             </div>
           </div>
-
         </div>
       </section>
 
@@ -150,9 +212,14 @@ export default function MenuPage() {
           <button
             key={tab}
             className={`px-6 py-3 text-lg font-semibold ${
-              activeTab === tab ? "border-b-4 border-red-600 text-red-600" : "text-gray-500"
+              activeTab === tab
+                ? 'border-b-4 border-red-600 text-red-600'
+                : 'text-gray-500'
             }`}
-            onClick={() => { setActiveTab(tab); setSelectedPackage(null); }}
+            onClick={() => {
+              setActiveTab(tab);
+              setSelectedPackage(null);
+            }}
           >
             {packages[tab].name}
           </button>
@@ -169,6 +236,12 @@ export default function MenuPage() {
           onClick={() => {
             setSelectedPackage(pkg);
             setGuests(pkg.minGuests);
+            setSelectedItems({
+              entrees: [],
+              mains: [],
+              desserts: [],
+              specialRequest: '',
+            });
           }}
           className="mt-6 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold"
         >
@@ -180,7 +253,6 @@ export default function MenuPage() {
       {selectedPackage && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 px-4">
           <div className="bg-white max-w-3xl w-full rounded-lg shadow-lg p-8 overflow-y-auto max-h-[90vh]">
-
             <h1 className="text-3xl font-bold text-center mb-2">{selectedPackage.name}</h1>
             <p className="text-center text-gray-500 mb-6">
               ${selectedPackage.price} per person (Min {selectedPackage.minGuests} guests)
@@ -188,55 +260,70 @@ export default function MenuPage() {
 
             {/* Guests */}
             <div className="mb-6">
-              <label className="block text-lg font-semibold mb-2">Number of Guests</label>
+              <label className="block text-lg font-semibold mb-2">
+                Number of Guests
+              </label>
               <input
                 type="number"
                 min={selectedPackage.minGuests}
                 value={guests}
-                onChange={(e) => setGuests(Number(e.target.value))}
+                onChange={(e) =>
+                  setGuests(Number(e.target.value) || selectedPackage.minGuests)
+                }
                 className="w-full p-3 border rounded"
               />
             </div>
 
             {/* Categories */}
-            {(["entrees", "mains", "desserts"] as const).map((cat) => (
+            {(['entrees', 'mains', 'desserts'] as const).map((cat) => (
               <div key={cat} className="mb-6">
                 <h3 className="text-xl font-semibold mb-2">
                   {cat.toUpperCase()} (Select {selectedPackage.limits[cat]})
                 </h3>
 
-                {/* ⭐ FIXED RESPONSIVE LIST */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {selectedPackage.options[cat].map((item: any, index: number) => (
-                    <label
-                      key={`${cat}-${index}-${item.name}`}
-                      className="flex flex-col sm:flex-row gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedItems[cat].includes(item.name)}
-                        onChange={() =>
-                          handleCheckbox(cat, item.name, selectedPackage.limits[cat])
-                        }
-                        className="mt-1"
-                      />
+                  {selectedPackage.options[cat].map((item, index) => {
+                    const stock = item.stock ?? 0;
+                    const outOfStock = stock <= 0;
 
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-24 h-24 sm:w-20 sm:h-20 object-cover rounded"
-                      />
+                    return (
+                      <label
+                        key={`${cat}-${index}-${item.name}`}
+                        className={`flex flex-col sm:flex-row gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 ${
+                          outOfStock ? 'opacity-60 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          disabled={outOfStock}
+                          checked={selectedItems[cat].includes(item.name)}
+                          onChange={() =>
+                            handleCheckbox(cat, item.name, selectedPackage.limits[cat])
+                          }
+                          className="mt-1"
+                        />
 
-                      <div className="flex-1">
-                        <p className="font-semibold">{item.name}</p>
-                        <p className="text-gray-600 text-sm leading-snug">
-                          {item.description}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-24 h-24 sm:w-20 sm:h-20 object-cover rounded"
+                        />
+
+                        <div className="flex-1">
+                          <p className="font-semibold">{item.name}</p>
+                          <p className="text-gray-600 text-sm leading-snug">
+                            {item.description}
+                          </p>
+                          <p className="text-sm font-semibold text-red-600 mt-1">
+                            {outOfStock
+                              ? 'Out of stock'
+                              : `Global Stock: ${stock} servings available`}
+                          </p>
+                        </div>
+                      </label>
+                    );
+                  })}
                 </div>
-
               </div>
             ))}
 
@@ -246,7 +333,10 @@ export default function MenuPage() {
               <textarea
                 value={selectedItems.specialRequest}
                 onChange={(e) =>
-                  setSelectedItems((prev) => ({ ...prev, specialRequest: e.target.value }))
+                  setSelectedItems((prev) => ({
+                    ...prev,
+                    specialRequest: e.target.value,
+                  }))
                 }
                 className="w-full p-3 border rounded"
                 placeholder="e.g. Extra spicy, Nut allergy..."
@@ -268,11 +358,9 @@ export default function MenuPage() {
                 ← Cancel and Go Back
               </button>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }

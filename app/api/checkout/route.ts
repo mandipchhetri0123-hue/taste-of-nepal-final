@@ -9,7 +9,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // 👇 Detect environment dynamically (THIS FIXES YOUR REDIRECT BUG)
     const origin =
       process.env.NEXT_PUBLIC_BASE_URL ||
       req.headers.get("origin") ||
@@ -19,7 +18,6 @@ export async function POST(req: NextRequest) {
       payment_method_types: ["card"],
       mode: "payment",
 
-      // 👇 FIXED — dynamic base URL
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout`,
 
@@ -32,7 +30,7 @@ export async function POST(req: NextRequest) {
         address: body.customer.address,
         note: body.customer.note ?? "",
         email: body.customer.email,
-        items: JSON.stringify(body.items),
+        items: JSON.stringify(body.items), // items include selections + guests
       },
 
       line_items: body.items.map((item: any) => ({

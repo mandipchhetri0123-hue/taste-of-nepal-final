@@ -9,11 +9,9 @@ export default function CateringAdminPage() {
 
   const [loading, setLoading] = useState(true);
   const [packages, setPackages] = useState<any>(null);
-  const [active, setActive] = useState<"standard" | "premium" | "deluxe">(
-    "standard"
-  );
+  const [active, setActive] = useState<"standard" | "premium" | "deluxe">("standard");
 
-  // Load all 3 packages
+  // Load all packages
   useEffect(() => {
     async function load() {
       const std = await getDoc(doc(db, "cateringPackages", "standard"));
@@ -32,24 +30,42 @@ export default function CateringAdminPage() {
     load();
   }, []);
 
-  // Save to Firestore
+  // ⭐ Save entire package AND create stock for newly added dishes
   async function savePackage() {
     const pkg = active;
     const data = packages[pkg];
 
-    await fetch("/api/admin/catering/update", {
+    // 🔸 1. Save catering package to Firestore
+    const res = await fetch("/api/admin/catering/update", {
       method: "POST",
       body: JSON.stringify({ pkg, data }),
     });
 
-    alert("✅ Saved successfully!");
+    if (!res.ok) {
+      alert("❌ Failed to save catering package!");
+      return;
+    }
+
+    // 🔸 2. Scan ALL items and create global stock entries
+    const categories = ["entrees", "mains", "desserts"];
+
+    for (const category of categories) {
+      for (const item of data.options[category]) {
+        await fetch("/api/stock/create", {
+          method: "POST",
+          body: JSON.stringify({ name: item.name }),
+        });
+      }
+    }
+
+    alert("✅ Saved and Stock Synced Successfully!");
   }
 
   if (loading || !packages) return <p className="p-10">Loading…</p>;
 
   const pkg = packages[active];
 
-  // Helper to update fields
+  // Update package-level fields
   const updateField = (field: string, value: any) => {
     setPackages({
       ...packages,
@@ -60,7 +76,7 @@ export default function CateringAdminPage() {
     });
   };
 
-  // Update limits (entrees/mains/desserts)
+  // Update limits
   const updateLimit = (category: string, value: number) => {
     setPackages({
       ...packages,
@@ -74,7 +90,7 @@ export default function CateringAdminPage() {
     });
   };
 
-  // Update options list (object format)
+  // Update menu items inside package
   const updateOptions = (category: string, newList: any[]) => {
     setPackages({
       ...packages,
@@ -107,7 +123,7 @@ export default function CateringAdminPage() {
         ))}
       </div>
 
-      {/* Basic fields */}
+      {/* Basic Package Info */}
       <div className="bg-white p-6 rounded shadow mb-6">
         <label className="font-semibold">Package Name</label>
         <input
@@ -133,7 +149,7 @@ export default function CateringAdminPage() {
         />
       </div>
 
-      {/* Limits */}
+      {/* Selection Limits */}
       <div className="bg-white p-6 rounded shadow mb-6">
         <h2 className="text-xl font-bold mb-4">Selection Limits</h2>
 
@@ -150,7 +166,7 @@ export default function CateringAdminPage() {
         ))}
       </div>
 
-      {/* Options Editor (Image + Name + Description) */}
+      {/* Menu Items Editor */}
       <div className="bg-white p-6 rounded shadow mb-6">
         <h2 className="text-xl font-bold mb-4">Menu Items</h2>
 
@@ -159,10 +175,8 @@ export default function CateringAdminPage() {
             <h3 className="font-semibold text-lg mb-2">{cat.toUpperCase()}</h3>
 
             {pkg.options[cat].map((item: any, index: number) => (
-              <div
-                key={index}
-                className="border p-4 rounded mb-3 bg-gray-50 space-y-2"
-              >
+              <div key={index} className="border p-4 rounded mb-3 bg-gray-50 space-y-2">
+                {/* Name */}
                 <label className="font-semibold block">Item Name</label>
                 <input
                   className="border p-2 rounded w-full"
@@ -174,6 +188,7 @@ export default function CateringAdminPage() {
                   }}
                 />
 
+                {/* Image */}
                 <label className="font-semibold block">Image URL</label>
                 <input
                   className="border p-2 rounded w-full"
@@ -185,6 +200,7 @@ export default function CateringAdminPage() {
                   }}
                 />
 
+                {/* Description */}
                 <label className="font-semibold block">Description</label>
                 <input
                   className="border p-2 rounded w-full"
@@ -196,6 +212,7 @@ export default function CateringAdminPage() {
                   }}
                 />
 
+                {/* Delete Item */}
                 <button
                   className="bg-red-600 text-white px-4 py-2 rounded mt-2"
                   onClick={() => {
@@ -210,7 +227,7 @@ export default function CateringAdminPage() {
               </div>
             ))}
 
-            {/* Add new item */}
+            {/* Add New Item */}
             <button
               className="mt-2 bg-green-600 text-white px-4 py-2 rounded"
               onClick={() =>
@@ -230,7 +247,7 @@ export default function CateringAdminPage() {
         ))}
       </div>
 
-      {/* Save Button */}
+      {/* SAVE BUTTON */}
       <button
         className="bg-blue-600 text-white px-6 py-3 rounded text-lg"
         onClick={savePackage}

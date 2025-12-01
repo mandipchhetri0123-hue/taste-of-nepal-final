@@ -11,6 +11,7 @@ export type CartSelections = {
 
 export type CartItem = {
   id: string;
+  packageId?: string; // standard | premium | deluxe, not required for stock now but useful
   name: string;
   price: number;      // price per person
   guests: number;     // number of guests
