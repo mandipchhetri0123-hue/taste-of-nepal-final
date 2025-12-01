@@ -212,6 +212,12 @@ export default function ContactPage() {
             </a>
 
           </div>
+          <div className="mt-4">
+            <a href="https://google.com" target="_blank" className="text-blue-600 underline">
+             Test Link (Google.com)
+            </a>
+          </div>
+
 
         </div>
       </div>
