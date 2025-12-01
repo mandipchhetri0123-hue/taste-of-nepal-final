@@ -203,13 +203,14 @@ export default function ContactPage() {
 
            {/* View Large Map Button */}
            <a
-             href="https://www.google.com/maps?q=600+Railway+Parade,+Hurstville+NSW+2220,+Australia"
+             href="https://www.google.com/maps/search/?api=1&query=600+Railway+Parade,+Hurstville+NSW+2220,+Australia"
              target="_blank"
              rel="noopener noreferrer"
-             className="block text-center bg-red-600 hover:bg-red-700 text-white font-semibold py-3"
-             >
+             className="block text-center bg-red-600 hover:bg-red-700 text-white font-semibold py-3 mt-0"
+            >
              View in Large Map
             </a>
+
           </div>
 
         </div>
