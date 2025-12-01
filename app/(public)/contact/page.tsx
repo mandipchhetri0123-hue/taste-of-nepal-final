@@ -198,7 +198,7 @@ export default function ContactPage() {
               loading="lazy"
               allowFullScreen
               referrerPolicy="no-referrer-when-downgrade"
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3311.423971317967!2d151.098!3d-33.967!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6b12b99a2a8d1d2b%3A0x3f9e2d3a1d9cda13!2sHurstville%20NSW%202220!5e0!3m2!1sen!2sau!4v1690022389527!5m2!1sen!2sau"
+              src="https://www.google.com/maps/search/?api=1&query=600+Railway+Parade,+Hurstville+NSW+2220,+Australia"
             ></iframe>
 
            {/* View Large Map Button */}
@@ -212,13 +212,6 @@ export default function ContactPage() {
             </a>
 
           </div>
-          <div className="mt-4">
-            <a href="https://google.com" target="_blank" className="text-blue-600 underline">
-             Test Link (Google.com)
-            </a>
-          </div>
-
-
         </div>
       </div>
     </div>
