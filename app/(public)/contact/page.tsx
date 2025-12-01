@@ -198,7 +198,8 @@ export default function ContactPage() {
               loading="lazy"
               allowFullScreen
               referrerPolicy="no-referrer-when-downgrade"
-              src="https://www.google.com/maps/search/?api=1&query=600+Railway+Parade,+Hurstville+NSW+2220,+Australia"
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3311.409019910068!2d151.10085!3d-33.96672!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6b12b99a7fc1a9c3%3A0x5f5163afab674a7d!2s600%20Railway%20Pde%2C%20Hurstville%20NSW%202220!5e0!3m2!1sen!2sau!4v1701260000000!5m2!1sen!2sau"
+
             ></iframe>
 
            {/* View Large Map Button */}
