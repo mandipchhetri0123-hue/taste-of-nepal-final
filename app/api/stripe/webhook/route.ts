@@ -208,7 +208,7 @@ if (customerEmail) {
 
           <p>
             If you need to update your order details,<br>
-            please contact us at <strong>support@tasteofnepal.xyz</strong>.
+            please contact us at <strong>support@urkafeniof.resend.app</strong>.
           </p>
 
           <p style="margin-top:25px;">

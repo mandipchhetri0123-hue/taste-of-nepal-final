@@ -179,7 +179,7 @@ export default function ContactPage() {
               <strong>Email:</strong><br />
               <a href="mailto:orders@tasteofnepal.com.au"
                 className="text-red-600 hover:underline">
-                mandipchhetri0123@gmail.com
+                support@urkafeniof.resend.app
               </a>
             </p>
 
@@ -189,7 +189,7 @@ export default function ContactPage() {
             </p>
           </div>
 
-          {/* Google Map */}
+         {/* GOOGLE MAP + VIEW IN LARGE MAP */}
           <div className="rounded-lg overflow-hidden shadow-md">
             <iframe
               title="Taste of Nepal Location"
@@ -200,7 +200,18 @@ export default function ContactPage() {
               referrerPolicy="no-referrer-when-downgrade"
               src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3311.423971317967!2d151.098!3d-33.967!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6b12b99a2a8d1d2b%3A0x3f9e2d3a1d9cda13!2sHurstville%20NSW%202220!5e0!3m2!1sen!2sau!4v1690022389527!5m2!1sen!2sau"
             ></iframe>
+
+           {/* View Large Map Button */}
+           <a
+             href="https://www.google.com/maps?q=600+Railway+Parade,+Hurstville+NSW+2220,+Australia"
+             target="_blank"
+             rel="noopener noreferrer"
+             className="block text-center bg-red-600 hover:bg-red-700 text-white font-semibold py-3"
+             >
+             View in Large Map
+            </a>
           </div>
+
         </div>
       </div>
     </div>
