@@ -9,7 +9,12 @@ export default function CateringAdminPage() {
 
   const [loading, setLoading] = useState(true);
   const [packages, setPackages] = useState<any>(null);
-  const [active, setActive] = useState<"standard" | "premium" | "deluxe">("standard");
+  const [active, setActive] = useState<"standard" | "premium" | "deluxe">(
+    "standard"
+  );
+
+  // ⭐ NEW: saving state to prevent double click
+  const [saving, setSaving] = useState(false);
 
   // Load all packages
   useEffect(() => {
@@ -30,35 +35,46 @@ export default function CateringAdminPage() {
     load();
   }, []);
 
-  // ⭐ Save entire package AND create stock for newly added dishes
+  // ⭐ Save entire package AND sync stock
   async function savePackage() {
+    if (saving) return; // stop double click
+    setSaving(true);
+
     const pkg = active;
     const data = packages[pkg];
 
-    // 🔸 1. Save catering package to Firestore
-    const res = await fetch("/api/admin/catering/update", {
-      method: "POST",
-      body: JSON.stringify({ pkg, data }),
-    });
+    try {
+      // 🔸 1. Save catering package
+      const res = await fetch("/api/admin/catering/update", {
+        method: "POST",
+        body: JSON.stringify({ pkg, data }),
+      });
 
-    if (!res.ok) {
-      alert("❌ Failed to save catering package!");
-      return;
-    }
-
-    // 🔸 2. Scan ALL items and create global stock entries
-    const categories = ["entrees", "mains", "desserts"];
-
-    for (const category of categories) {
-      for (const item of data.options[category]) {
-        await fetch("/api/stock/create", {
-          method: "POST",
-          body: JSON.stringify({ name: item.name }),
-        });
+      if (!res.ok) {
+        alert("❌ Failed to save catering package!");
+        setSaving(false);
+        return;
       }
+
+      // 🔸 2. Sync all dishes to stock
+      const categories = ["entrees", "mains", "desserts"];
+
+      for (const category of categories) {
+        for (const item of data.options[category]) {
+          await fetch("/api/stock/create", {
+            method: "POST",
+            body: JSON.stringify({ name: item.name }),
+          });
+        }
+      }
+
+      alert("✅ Saved and Stock Synced Successfully!");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Something went wrong during save");
     }
 
-    alert("✅ Saved and Stock Synced Successfully!");
+    setSaving(false);
   }
 
   if (loading || !packages) return <p className="p-10">Loading…</p>;
@@ -90,7 +106,7 @@ export default function CateringAdminPage() {
     });
   };
 
-  // Update menu items inside package
+  // Update menu items
   const updateOptions = (category: string, newList: any[]) => {
     setPackages({
       ...packages,
@@ -175,7 +191,10 @@ export default function CateringAdminPage() {
             <h3 className="font-semibold text-lg mb-2">{cat.toUpperCase()}</h3>
 
             {pkg.options[cat].map((item: any, index: number) => (
-              <div key={index} className="border p-4 rounded mb-3 bg-gray-50 space-y-2">
+              <div
+                key={index}
+                className="border p-4 rounded mb-3 bg-gray-50 space-y-2"
+              >
                 {/* Name */}
                 <label className="font-semibold block">Item Name</label>
                 <input
@@ -212,7 +231,7 @@ export default function CateringAdminPage() {
                   }}
                 />
 
-                {/* Delete Item */}
+                {/* Delete */}
                 <button
                   className="bg-red-600 text-white px-4 py-2 rounded mt-2"
                   onClick={() => {
@@ -249,10 +268,13 @@ export default function CateringAdminPage() {
 
       {/* SAVE BUTTON */}
       <button
-        className="bg-blue-600 text-white px-6 py-3 rounded text-lg"
+        className={`px-6 py-3 rounded text-lg text-white ${
+          saving ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600"
+        }`}
+        disabled={saving}
         onClick={savePackage}
       >
-        Save Changes
+        {saving ? "Saving…" : "Save Changes"}
       </button>
     </div>
   );
