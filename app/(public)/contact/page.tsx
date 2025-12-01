@@ -166,21 +166,20 @@ export default function ContactPage() {
 
             <p className="text-gray-700 mb-3">
               <strong>Address:</strong><br />
-              123 Nepal Street<br />
+              600 Railway Parade<br />
               Hurstville, NSW 2220, Australia
             </p>
 
             <p className="text-gray-700 mb-3">
               <strong>Phone:</strong><br />
-              0478 369 119<br />
-              0414 543 436
+              0405 639 995
             </p>
 
             <p className="text-gray-700 mb-3">
               <strong>Email:</strong><br />
               <a href="mailto:orders@tasteofnepal.com.au"
                 className="text-red-600 hover:underline">
-                orders@tasteofnepal.com.au
+                mandipchhetri0123@gmail.com
               </a>
             </p>
 

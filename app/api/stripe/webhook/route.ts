@@ -152,41 +152,80 @@ export async function POST(req: NextRequest) {
     }
 
     // ------------------------------------
-    // 3️⃣ SEND EMAIL WITH RESEND
-    // ------------------------------------
-    if (customerEmail) {
-      try {
-        const htmlItems = items
-          .map(
-            (i: any) =>
-              `<li><strong>${i.name}</strong> — ${i.guests} guests — $${i.price * i.guests}</li>`
-          )
-          .join("");
+// 3️⃣ SEND PROFESSIONAL EMAIL RECEIPT
+// ------------------------------------
+if (customerEmail) {
+  try {
+    // Format each ordered package
+    const formattedItems = items
+      .map((item: any) => {
+        const ents = item.selections?.entrees?.join(", ") || "None";
+        const mains = item.selections?.mains?.join(", ") || "None";
+        const dess = item.selections?.desserts?.join(", ") || "None";
 
-        await resend.emails.send({
-          from: "Taste of Nepal <orders@tasteofnepal.xyz>",
-          to: customerEmail,
-          subject: "Your Order Confirmation — Taste of Nepal",
-          html: `
-            <h2>Thank you for your order, ${fullName}!</h2>
+        return `
+          <div style="margin-bottom:20px; padding:15px; border:1px solid #eee; border-radius:8px;">
+            <h3 style="margin:0; font-size:18px; color:#D62828;">
+              ${item.name} — ${item.guests} guests — $${item.price * item.guests}
+            </h3>
 
-            <p>Your payment has been successfully completed.</p>
+            <p style="margin:8px 0 2px;"><strong>Entrees:</strong> ${ents}</p>
+            <p style="margin:2px 0;"><strong>Mains:</strong> ${mains}</p>
+            <p style="margin:2px 0;"><strong>Desserts:</strong> ${dess}</p>
 
-            <h3>Order Summary</h3>
-            <ul>${htmlItems}</ul>
+            ${
+              item.selections?.specialRequest
+                ? `<p style="margin-top:8px;"><strong>Special Request:</strong> ${item.selections.specialRequest}</p>`
+                : ""
+            }
+          </div>
+        `;
+      })
+      .join("");
 
-            <p><strong>Total Paid:</strong> $${(session.amount_total ?? 0) / 100}</p>
+    const totalPaid = (session.amount_total ?? 0) / 100;
 
-            <br>
-            <p>Thank you for choosing Taste of Nepal 🇳🇵</p>
-          `,
-        });
+    await resend.emails.send({
+      from: "Taste of Nepal <orders@tasteofnepal.xyz>",
+      to: customerEmail,
+      subject: "Your Taste of Nepal Order Confirmation",
+      html: `
+        <div style="font-family:Arial, sans-serif; line-height:1.6; color:#333;">
+          
+          <h2 style="color:#D62828;">Thank you for your order, ${fullName}!</h2>
 
-        console.log("📨 Email sent to:", customerEmail);
-      } catch (err: any) {
-        console.error("❌ Email error:", err.message);
-      }
-    }
+          <p>Your catering order has been successfully paid and recorded.</p>
+
+          <h3 style="margin-top:20px;">Order Details</h3>
+
+          ${formattedItems}
+
+          <p style="font-size:16px; margin-top:15px;">
+            <strong>Total Paid:</strong> $${totalPaid}
+          </p>
+
+          <hr style="margin:25px 0;">
+
+          <p>
+            If you need to update your order details,<br>
+            please contact us at <strong>support@tasteofnepal.xyz</strong>.
+          </p>
+
+          <p style="margin-top:25px;">
+            Thank you for choosing <strong>Taste of Nepal 🇳🇵</strong>
+          </p>
+
+        </div>
+      `,
+    });
+
+    console.log("📨 Professional order email sent →", customerEmail);
+
+  } catch (err: any) {
+    console.error("❌ Email error:", err.message);
+  }
+}
+
   }
 
   return NextResponse.json({ received: true });
