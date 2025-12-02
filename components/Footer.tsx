@@ -29,16 +29,15 @@ export default function Footer() {
           <div>
             <h4 className="text-xl font-bold text-white mb-4">Contact Us</h4>
             <ul className="space-y-2 text-gray-400">
-              <li><i className="fas fa-map-marker-alt mr-2 text-red-500" /> Hurstville, NSW 2220</li>
-              <li><i className="fas fa-phone mr-2 text-red-500" /> 0478 369 119</li>
-              <li><i className="fas fa-phone mr-2 text-red-500" /> 0414 543 436</li>
-              <li><i className="fas fa-envelope mr-2 text-red-500" /> orders@tasteofnepal.com.au</li>
+              <li><i className="fas fa-map-marker-alt mr-2 text-red-500" /> 600 Railway Parade Hurstville NSW 2220</li>
+              <li><i className="fas fa-phone mr-2 text-red-500" /> 0405 639 995</li>
+              <li><i className="fas fa-envelope mr-2 text-red-500" /> support@urkafeniof.resend.app</li>
             </ul>
           </div>
         </div>
 
         <div className="border-t border-gray-700 mt-8 pt-8 text-center text-gray-500">
-          <p>© 2024 Taste of Nepal. All Rights Reserved.</p>
+          <p>© 2025 Taste of Nepal. All Rights Reserved.</p>
           <p className="text-sm">Bringing the authentic taste of the Himalayas to Sydney.</p>
         </div>
       </div>
