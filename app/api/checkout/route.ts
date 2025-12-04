@@ -21,7 +21,11 @@ export async function POST(req: NextRequest) {
       success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/checkout`,
 
+      // REQUIRED — This ensures Stripe generates a real receipt URL
       customer_email: body.customer.email,
+      payment_intent_data: {
+        receipt_email: body.customer.email, // ⭐ THIS FIXES RECEIPT GENERATION
+      },
 
       metadata: {
         userId: body.customer.userId,
@@ -30,7 +34,7 @@ export async function POST(req: NextRequest) {
         address: body.customer.address,
         note: body.customer.note ?? "",
         email: body.customer.email,
-        items: JSON.stringify(body.items), // items include selections + guests
+        items: JSON.stringify(body.items),
       },
 
       line_items: body.items.map((item: any) => ({
@@ -44,6 +48,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ url: session.url });
+
   } catch (err: any) {
     console.error("Stripe checkout error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
