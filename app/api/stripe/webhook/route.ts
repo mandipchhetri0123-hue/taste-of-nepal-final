@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 
 // Stripe instance
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-  apiVersion: "2025-10-29.clover",
+  // keep your existing version if it works for you
+  apiVersion: "2025-10-29.clover" as any,
 });
 
 // Resend instance
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse("Missing stripe-signature", { status: 400 });
   }
 
+  // Stripe needs RAW body
   const rawBody = await req.text();
 
   let event: Stripe.Event;
@@ -37,11 +39,16 @@ export async function POST(req: NextRequest) {
 
   console.log("🔔 Stripe event received:", event.type);
 
+  // ------------------------------------------------------------------
+  // HANDLE CHECKOUT SESSION COMPLETED
+  // ------------------------------------------------------------------
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const metadata = session.metadata || {};
 
-    // Parse items safely
+    // -------------------------------
+    // Parse items safely from metadata
+    // -------------------------------
     let items: any[] = [];
     try {
       items = metadata.items ? JSON.parse(metadata.items) : [];
@@ -96,7 +103,7 @@ export async function POST(req: NextRequest) {
     try {
       for (const orderItem of items) {
         const selections = orderItem.selections as
-          | { entrees: string[]; mains: string[]; desserts: string[] }
+          | { entrees?: string[]; mains?: string[]; desserts?: string[] }
           | undefined;
         const guests = orderItem.guests || 0;
 
@@ -119,7 +126,9 @@ export async function POST(req: NextRequest) {
             const stockRef =
               adminDB
                 .collection("foodStock")
-                .doc(dishName) as FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>;
+                .doc(
+                  dishName
+                ) as FirebaseFirestore.DocumentReference<FirebaseFirestore.DocumentData>;
 
             await adminDB.runTransaction(
               async (transaction: FirebaseFirestore.Transaction) => {
@@ -148,84 +157,129 @@ export async function POST(req: NextRequest) {
       }
     } catch (err: any) {
       console.error("❌ Global stock update error:", err.message);
-      // Do not fail the webhook – payment + order already processed
+      // Do not fail webhook – payment + order already processed
     }
 
     // ------------------------------------
-// 3️⃣ SEND PROFESSIONAL EMAIL RECEIPT
-// ------------------------------------
-if (customerEmail) {
-  try {
-    // Format each ordered package
-    const formattedItems = items
-      .map((item: any) => {
-        const ents = item.selections?.entrees?.join(", ") || "None";
-        const mains = item.selections?.mains?.join(", ") || "None";
-        const dess = item.selections?.desserts?.join(", ") || "None";
+    // 3️⃣ GET STRIPE RECEIPT URL (OPTION A)
+    // ------------------------------------
+    let receiptUrl: string | null = null;
 
-        return `
-          <div style="margin-bottom:20px; padding:15px; border:1px solid #eee; border-radius:8px;">
-            <h3 style="margin:0; font-size:18px; color:#D62828;">
-              ${item.name} — ${item.guests} guests — $${item.price * item.guests}
-            </h3>
+    try {
+      if (session.payment_intent) {
+        // Retrieve PaymentIntent and cast to PaymentIntent so TS is happy
+       let receiptUrl: string | null = null;
 
-            <p style="margin:8px 0 2px;"><strong>Entrees:</strong> ${ents}</p>
-            <p style="margin:2px 0;"><strong>Mains:</strong> ${mains}</p>
-            <p style="margin:2px 0;"><strong>Desserts:</strong> ${dess}</p>
+try {
+  if (session.payment_intent) {
+    const pi = await stripe.paymentIntents.retrieve(
+      session.payment_intent as string,
+      { expand: ["charges"] }     // 👈 forces Stripe to include charges[]
+    );
 
-            ${
-              item.selections?.specialRequest
-                ? `<p style="margin-top:8px;"><strong>Special Request:</strong> ${item.selections.specialRequest}</p>`
-                : ""
-            }
-          </div>
-        `;
-      })
-      .join("");
+    const charge =
+      (pi as any).charges?.data?.[0];  // 👈 avoid TS error safely
 
-    const totalPaid = (session.amount_total ?? 0) / 100;
-
-    await resend.emails.send({
-      from: "Taste of Nepal <orders@tasteofnepal.xyz>",
-      to: customerEmail,
-      subject: "Your Taste of Nepal Order Confirmation",
-      html: `
-        <div style="font-family:Arial, sans-serif; line-height:1.6; color:#333;">
-          
-          <h2 style="color:#D62828;">Thank you for your order, ${fullName}!</h2>
-
-          <p>Your catering order has been successfully paid and recorded.</p>
-
-          <h3 style="margin-top:20px;">Order Details</h3>
-
-          ${formattedItems}
-
-          <p style="font-size:16px; margin-top:15px;">
-            <strong>Total Paid:</strong> $${totalPaid}
-          </p>
-
-          <hr style="margin:25px 0;">
-
-          <p>
-            If you need to update your order details,<br>
-            please contact us at <strong>support@urkafeniof.resend.app</strong>.
-          </p>
-
-          <p style="margin-top:25px;">
-            Thank you for choosing <strong>Taste of Nepal 🇳🇵</strong>
-          </p>
-
-        </div>
-      `,
-    });
-
-    console.log("📨 Professional order email sent →", customerEmail);
-
-  } catch (err: any) {
-    console.error("❌ Email error:", err.message);
+    if (charge?.receipt_url) {
+      receiptUrl = charge.receipt_url;
+    }
   }
+} catch (err: any) {
+  console.error("⚠️ Could not fetch Stripe receipt URL:", err.message);
 }
 
+      }
+    } catch (err: any) {
+      console.error("⚠️ Could not fetch Stripe receipt URL:", err.message);
+    }
+
+    // ------------------------------------
+    // 4️⃣ SEND PROFESSIONAL EMAIL RECEIPT
+    // ------------------------------------
+    if (customerEmail) {
+      try {
+        // Format each ordered package
+        const formattedItems = items
+          .map((item: any) => {
+            const ents = item.selections?.entrees?.join(", ") || "None";
+            const mains = item.selections?.mains?.join(", ") || "None";
+            const dess = item.selections?.desserts?.join(", ") || "None";
+
+            return `
+              <div style="margin-bottom:20px; padding:15px; border:1px solid #eee; border-radius:8px;">
+                <h3 style="margin:0; font-size:18px; color:#D62828;">
+                  ${item.name} — ${item.guests} guests — $${item.price * item.guests}
+                </h3>
+
+                <p style="margin:8px 0 2px;"><strong>Entrees:</strong> ${ents}</p>
+                <p style="margin:2px 0;"><strong>Mains:</strong> ${mains}</p>
+                <p style="margin:2px 0;"><strong>Desserts:</strong> ${dess}</p>
+
+                ${
+                  item.selections?.specialRequest
+                    ? `<p style="margin-top:8px;"><strong>Special Request:</strong> ${item.selections.specialRequest}</p>`
+                    : ""
+                }
+              </div>
+            `;
+          })
+          .join("");
+
+        const totalPaid = (session.amount_total ?? 0) / 100;
+
+        const receiptHtml = receiptUrl
+          ? `
+            <h3 style="margin-top:25px;">Stripe Receipt</h3>
+            <p>
+              You can view or download your official Stripe receipt here:<br>
+              <a href="${receiptUrl}" style="color:#1D4ED8;" target="_blank" rel="noopener">
+                View Receipt
+              </a>
+            </p>
+          `
+          : "";
+
+        await resend.emails.send({
+          from: "Taste of Nepal <orders@tasteofnepal.xyz>",
+          to: customerEmail,
+          subject: "Your Taste of Nepal Order Confirmation",
+          html: `
+            <div style="font-family:Arial, sans-serif; line-height:1.6; color:#333;">
+              
+              <h2 style="color:#D62828;">Thank you for your order, ${fullName}!</h2>
+
+              <p>Your catering order has been successfully paid and recorded.</p>
+
+              <h3 style="margin-top:20px;">Order Details</h3>
+
+              ${formattedItems}
+
+              <p style="font-size:16px; margin-top:15px;">
+                <strong>Total Paid:</strong> $${totalPaid}
+              </p>
+
+              ${receiptHtml}
+
+              <hr style="margin:25px 0;">
+
+              <p>
+                If you need to update your order details,<br>
+                please contact us at <strong>support@urkafeniof.resend.app</strong>.
+              </p>
+
+              <p style="margin-top:25px;">
+                Thank you for choosing <strong>Taste of Nepal 🇳🇵</strong>
+              </p>
+
+            </div>
+          `,
+        });
+
+        console.log("📨 Professional order email sent →", customerEmail);
+      } catch (err: any) {
+        console.error("❌ Email error:", err.message);
+      }
+    }
   }
 
   return NextResponse.json({ received: true });

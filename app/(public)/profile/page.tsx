@@ -2,10 +2,23 @@
 
 import { useEffect, useState, ChangeEvent } from "react";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
-import { getFirestore, doc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+} from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { app } from "@/firebase/config";
 
+// ==========================
+// TYPES
+// ==========================
 type UserData = {
   firstName?: string;
   lastName?: string;
@@ -15,18 +28,36 @@ type UserData = {
   dob?: string;
 };
 
+type OrderData = {
+  id: string;
+  createdAt: any;
+  totalAmount: number;
+  totalGuests: number;
+  address: string;
+  status: string;
+  items: any[];
+};
+
 const phoneRegex = /^\+[1-9]\d{7,14}$/;
 
 export default function ProfilePage() {
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const router = useRouter();
+
   const [userData, setUserData] = useState<UserData | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const router = useRouter();
+  // ORDER HISTORY STATES
+  const [orderHistory, setOrderHistory] = useState<OrderData[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
+  // ==========================
+  // LOAD USER PROFILE
+  // ==========================
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -47,28 +78,36 @@ export default function ProfilePage() {
     });
 
     return () => unsubscribe();
-  }, [auth, db, router]);
+  }, []);
 
+  // ==========================
+  // LOGOUT
+  // ==========================
   const handleLogout = async () => {
     await signOut(auth);
     router.push("/login");
   };
 
+  // ==========================
+  // INPUT UPDATE HANDLER
+  // ==========================
   const handleChange = (field: keyof UserData, value: string) => {
     setUserData((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
+  // ==========================
+  // SAVE PROFILE
+  // ==========================
   const handleSave = async () => {
     if (!auth.currentUser || !userData) return;
 
-    // Optional: basic checks
     if (!userData.firstName?.trim() || !userData.lastName?.trim()) {
       alert("Please enter your first and last name.");
       return;
     }
 
     if (userData.phone && !phoneRegex.test(userData.phone.trim())) {
-      alert("Please enter a valid phone number in international format, e.g. +61412345678.");
+      alert("Enter a valid phone number (e.g. +61412345678)");
       return;
     }
 
@@ -77,23 +116,64 @@ export default function ProfilePage() {
     try {
       const ref = doc(db, "users", auth.currentUser.uid);
       await updateDoc(ref, {
-        firstName: userData.firstName?.trim() || "",
-        lastName: userData.lastName?.trim() || "",
-        phone: userData.phone?.trim() || "",
-        gender: userData.gender || "",
-        dob: userData.dob || "",
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phone: userData.phone,
+        gender: userData.gender,
+        dob: userData.dob,
       });
 
-      alert("✅ Profile updated successfully!");
+      alert("Profile updated!");
       setEditMode(false);
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      alert("❌ Error updating profile.");
-    } finally {
-      setSaving(false);
+    } catch (err) {
+      console.error(err);
+      alert("Error updating profile.");
     }
+
+    setSaving(false);
   };
 
+  // ==========================
+  // ORDER HISTORY — FIRESTORE
+  // ==========================
+  const loadOrderHistory = async () => {
+    if (!auth.currentUser) return;
+
+    setLoadingOrders(true);
+    try {
+      const qRef = query(
+        collection(db, "orders"),
+        where("userId", "==", auth.currentUser.uid),
+        orderBy("createdAt", "desc")
+      );
+
+      const snap = await getDocs(qRef);
+      const list: OrderData[] = [];
+
+      snap.forEach((d) => list.push({ id: d.id, ...(d.data() as any) }));
+
+      setOrderHistory(list);
+      setShowHistory(true);
+    } catch (err) {
+      console.error(err);
+      alert("Error loading orders.");
+    }
+
+    setLoadingOrders(false);
+  };
+
+  // ==========================
+  // DATE FORMATTER
+  // ==========================
+  const formatDate = (ts: any) => {
+    if (!ts) return "";
+    const d = ts.toDate();
+    return d.toLocaleDateString() + " — " + d.toLocaleTimeString();
+  };
+
+  // ==========================
+  // LOADING SCREEN
+  // ==========================
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -116,10 +196,14 @@ export default function ProfilePage() {
     );
   }
 
+  // ==========================
+  // MAIN PROFILE UI
+  // ==========================
   return (
     <div className="max-w-2xl mx-auto bg-white shadow-lg rounded-lg p-8 mt-12">
       <h1 className="text-4xl font-bold text-center mb-8">My Profile</h1>
 
+      {/* Profile Fields */}
       <div className="space-y-4">
         {/* FIRST NAME */}
         <div>
@@ -128,9 +212,7 @@ export default function ProfilePage() {
             <input
               type="text"
               value={userData.firstName || ""}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                handleChange("firstName", e.target.value)
-              }
+              onChange={(e) => handleChange("firstName", e.target.value)}
               className="border p-2 w-full rounded"
             />
           ) : (
@@ -145,9 +227,7 @@ export default function ProfilePage() {
             <input
               type="text"
               value={userData.lastName || ""}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                handleChange("lastName", e.target.value)
-              }
+              onChange={(e) => handleChange("lastName", e.target.value)}
               className="border p-2 w-full rounded"
             />
           ) : (
@@ -168,11 +248,9 @@ export default function ProfilePage() {
             <input
               type="tel"
               value={userData.phone || ""}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                handleChange("phone", e.target.value)
-              }
+              onChange={(e) => handleChange("phone", e.target.value)}
               className="border p-2 w-full rounded"
-              placeholder="e.g. +61412345678"
+              placeholder="+61412345678"
             />
           ) : (
             <p className="text-lg">{userData.phone || "Not provided"}</p>
@@ -185,9 +263,7 @@ export default function ProfilePage() {
           {editMode ? (
             <select
               value={userData.gender || ""}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                handleChange("gender", e.target.value)
-              }
+              onChange={(e) => handleChange("gender", e.target.value)}
               className="border p-2 w-full rounded"
             >
               <option value="">Select...</option>
@@ -207,9 +283,7 @@ export default function ProfilePage() {
             <input
               type="date"
               value={userData.dob || ""}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                handleChange("dob", e.target.value)
-              }
+              onChange={(e) => handleChange("dob", e.target.value)}
               className="border p-2 w-full rounded"
             />
           ) : (
@@ -253,6 +327,86 @@ export default function ProfilePage() {
           </button>
         </div>
       </div>
+
+      {/* ORDER HISTORY BUTTON */}
+      <div className="mt-10 text-center">
+        <button
+          onClick={loadOrderHistory}
+          className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700"
+        >
+          {loadingOrders ? "Loading..." : "View Order History"}
+        </button>
+      </div>
+
+      {/* ORDER HISTORY SECTION */}
+      {showHistory && (
+        <div className="mt-10 bg-gray-50 p-6 rounded-lg">
+          <h2 className="text-3xl font-bold mb-4">Order History</h2>
+
+          {orderHistory.length === 0 && (
+            <p className="text-gray-500">No orders yet.</p>
+          )}
+
+          {orderHistory.map((order) => (
+            <div
+              key={order.id}
+              className="border p-4 rounded-lg bg-white shadow mb-6"
+            >
+              <h3 className="text-xl font-bold">Order #{order.id}</h3>
+              <p className="text-gray-600">Date: {formatDate(order.createdAt)}</p>
+              <p className="text-gray-600">Address: {order.address}</p>
+              <p className="font-semibold mt-3">
+                Total Amount: ${order.totalAmount?.toFixed(2)}
+              </p>
+              <p className="font-semibold">Total Guests: {order.totalGuests}</p>
+              <p className="font-semibold">Status: {order.status}</p>
+
+              <h4 className="mt-4 font-bold text-lg">Items:</h4>
+
+              {order.items?.map((item, i) => (
+                <div
+                  key={i}
+                  className="ml-4 mt-3 p-3 border rounded bg-gray-50"
+                >
+                  <p className="font-semibold text-lg">
+                    {item.packageName || item.name}
+                  </p>
+
+                  <p className="text-sm">
+                    Guests: <strong>{item.guests}</strong>
+                  </p>
+
+                  <p className="text-sm">
+                    Price: <strong>${item.price}</strong>
+                  </p>
+
+                  <div className="mt-2 text-sm">
+                    <p>
+                      <strong>Entrees:</strong>{" "}
+                      {(item.selections?.entrees || []).join(", ")}
+                    </p>
+                    <p>
+                      <strong>Mains:</strong>{" "}
+                      {(item.selections?.mains || []).join(", ")}
+                    </p>
+                    <p>
+                      <strong>Desserts:</strong>{" "}
+                      {(item.selections?.desserts || []).join(", ")}
+                    </p>
+
+                    {item.specialRequest && (
+                      <p className="mt-2 text-sm text-blue-700">
+                        <strong>Special Request:</strong>{" "}
+                        {item.specialRequest}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

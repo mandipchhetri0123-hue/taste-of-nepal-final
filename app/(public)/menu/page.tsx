@@ -10,7 +10,9 @@ type MenuItem = {
   description: string;
   image: string;
   price?: number;
-  stock?: number; // from global foodStock
+  stock?: number;
+  category?: string;
+  packageName?: string;
 };
 
 type PackageData = {
@@ -49,6 +51,21 @@ export default function MenuPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 🔍 GLOBAL SEARCH STATES
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<MenuItem[]>([]);
+  const [singleItem, setSingleItem] = useState<MenuItem | null>(null);
+  const [singleGuests, setSingleGuests] = useState(6);
+  const [singleNote, setSingleNote] = useState('');
+
+  // 🧺 Manual multi-item order list
+  const [manualItems, setManualItems] = useState<
+    { item: MenuItem; qty: number; note: string }[]
+  >([]);
+
+  // All food items cost $5/person for manual/single orders
+  const FIXED_PRICE = 10;
+
   useEffect(() => {
     async function load() {
       try {
@@ -81,6 +98,62 @@ export default function MenuPage() {
 
   const pkg = packages[activeTab];
 
+  // 👉 Collect ALL food items from ALL packages
+  const getAllItems = () => {
+    const all: MenuItem[] = [];
+
+    Object.values(packages).forEach((pkg) => {
+      (['entrees', 'mains', 'desserts'] as const).forEach((cat) => {
+        // @ts-ignore dynamic access is safe
+        pkg.options[cat].forEach((item: MenuItem) => {
+          all.push({
+            ...item,
+            category: cat,
+            packageName: pkg.name,
+          });
+        });
+      });
+    });
+
+    return all;
+  };
+
+  // 🔍 Smart search (handles momo / c momo / spaces)
+  const smartSearch = (query: string) => {
+    const q = query.toLowerCase().trim();
+    if (!q) {
+      setSearchResults([]);
+      return;
+    }
+
+    const all = getAllItems();
+
+    const results = all.filter((item) => {
+      const name = (item.name || '').toLowerCase();
+
+      if (!name) return false;
+
+      // Normalised (remove spaces)
+      const n1 = name.replace(/\s+/g, '');
+      const q1 = q.replace(/\s+/g, '');
+
+      // Direct match
+      if (name.includes(q)) return true;
+
+      // Space-insensitive (momo vs c momo vs cmomo)
+      if (n1.includes(q1)) return true;
+
+      // Match any word starting with query (sadeko -> bhatmas sadeko)
+      const parts = name.split(' ');
+      if (parts.some((p) => p.startsWith(q))) return true;
+
+      return false;
+    });
+
+    setSearchResults(results);
+  };
+
+  // ✔ ORIGINAL checkbox logic
   const handleCheckbox = (
     category: 'entrees' | 'mains' | 'desserts',
     itemName: string,
@@ -108,6 +181,7 @@ export default function MenuPage() {
     });
   };
 
+  // ✔ ORIGINAL package Add to Cart with stock validation
   const handleAddToCart = () => {
     if (!selectedPackage) return;
 
@@ -154,13 +228,118 @@ export default function MenuPage() {
     setGuests(selectedPackage.minGuests);
   };
 
+  // Total for manual multi-item order (for display)
+  const manualTotal = manualItems.reduce((sum, m) => sum + m.qty * FIXED_PRICE, 0);
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
-      {/* FEATURED SECTION */}
+      {/* 🔍 GLOBAL SEARCH BAR */}
+      <div className="max-w-3xl mx-auto mb-6">
+        <input
+          type="text"
+          placeholder="Search any food (e.g. momo, c momo, sadeko)…"
+          value={searchTerm}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSearchTerm(v);
+            smartSearch(v);
+          }}
+          className="w-full p-4 border border-gray-300 rounded-lg shadow-sm"
+        />
+      </div>
+
+      {/* 🔍 SEARCH RESULTS */}
+      {searchResults.length > 0 && (
+        <div className="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-lg mb-10">
+          <h2 className="text-xl font-bold mb-4">Search Results</h2>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            {searchResults.map((item, index) => (
+              <div
+                key={index}
+                className="border rounded-lg p-3 flex gap-3 cursor-pointer hover:bg-gray-50"
+                onClick={() => {
+                  setSingleItem(item);
+                  setSingleGuests(6);
+                  setSingleNote('');
+                }}
+              >
+                <img
+                  src={item.image}
+                  alt={item.name}
+                  className="w-20 h-20 rounded object-cover"
+                />
+
+                <div>
+                  <p className="font-semibold text-lg">{item.name}</p>
+                  <p className="text-sm text-gray-600 line-clamp-3">
+                    {item.description}
+                  </p>
+                  <p className="text-sm font-semibold text-red-600 mt-1">
+                    Stock: {item.stock ?? 0}
+                  </p>
+                  <p className="text-sm font-bold text-green-700 mt-1">
+                    Price: ${FIXED_PRICE} per person
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 🧺 MANUAL MULTI-ITEM ORDER SUMMARY */}
+      {manualItems.length > 0 && (
+        <div className="max-w-3xl mx-auto bg-white p-5 rounded-lg shadow mb-10">
+          <h2 className="text-2xl font-bold mb-4">Your Manual Catering Order</h2>
+
+          {manualItems.map((m, i) => (
+            <div key={i} className="border p-3 rounded mb-3">
+              <p className="font-semibold text-lg">{m.item.name}</p>
+              <p>
+                People: {m.qty} × ${FIXED_PRICE} = ${m.qty * FIXED_PRICE}
+              </p>
+              {m.note && (
+                <p className="text-sm text-gray-600 mt-1">Note: {m.note}</p>
+              )}
+            </div>
+          ))}
+
+          <div className="font-bold text-xl mt-4">Total: ${manualTotal}</div>
+
+          <button
+            onClick={() => {
+              // Add each manual item as its own cart item
+              manualItems.forEach((m, idx) => {
+                addToCart({
+                  id: `${m.item.name}-${Date.now()}-${idx}`,
+                  packageId: 'single-item',
+                  name: m.item.name,
+                  price: m.qty * FIXED_PRICE,
+                  guests: m.qty,
+                  selections: {
+                    entrees: [],
+                    mains: [],
+                    desserts: [],
+                    specialRequest: m.note,
+                  },
+                });
+              });
+
+              alert('✅ Manual catering order added to cart!');
+              setManualItems([]);
+            }}
+            className="mt-4 bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold"
+          >
+            Confirm Manual Order & Add to Cart
+          </button>
+        </div>
+      )}
+
+      {/* FEATURED SECTION (unchanged) */}
       <section className="max-w-6xl mx-auto px-4 pt-12 pb-16">
         <h2 className="text-4xl font-heading font-bold text-center mb-10">
-          Our Signature Catering Dishes
-        </h2>
+          Our Signature Catering Dishe        </h2>
 
         <div className="grid md:grid-cols-3 gap-10">
           <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
@@ -206,7 +385,7 @@ export default function MenuPage() {
         Choose one of our packages below and customize it for your event.
       </p>
 
-      {/* Tabs */}
+      {/* Tabs (unchanged) */}
       <div className="flex justify-center border-b mb-8">
         {(['standard', 'premium', 'deluxe'] as const).map((tab) => (
           <button
@@ -226,7 +405,7 @@ export default function MenuPage() {
         ))}
       </div>
 
-      {/* Package Card */}
+      {/* Package Card (unchanged) */}
       <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md text-center">
         <h2 className="text-2xl font-bold mb-2">{pkg.name}</h2>
         <p className="text-gray-600">${pkg.price} per person</p>
@@ -249,7 +428,7 @@ export default function MenuPage() {
         </button>
       </div>
 
-      {/* Modal */}
+      {/* Package Modal (unchanged except layout tweaks from original) */}
       {selectedPackage && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 px-4">
           <div className="bg-white max-w-3xl w-full rounded-lg shadow-lg p-8 overflow-y-auto max-h-[90vh]">
@@ -356,6 +535,120 @@ export default function MenuPage() {
                 className="text-blue-600 hover:underline"
               >
                 ← Cancel and Go Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SINGLE ITEM ORDER MODAL (search) */}
+      {singleItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start z-50 pt-16 px-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-lg p-6 shadow-xl">
+            <h2 className="text-2xl font-bold mb-3">{singleItem.name}</h2>
+
+            <img
+              src={singleItem.image}
+              alt={singleItem.name}
+              className="w-full h-56 object-cover rounded mb-3"
+            />
+
+            <p className="text-gray-700 mb-2">{singleItem.description}</p>
+
+            <p className="text-red-600 font-semibold mb-2">
+              Stock: {singleItem.stock ?? 0}
+            </p>
+
+            <p className="font-bold text-lg mb-3">
+              Price per person: ${FIXED_PRICE}
+            </p>
+
+            <label className="font-semibold block mb-1">Number of People</label>
+
+            <p className="text-sm text-gray-600 mt-1">Minimum order: 6 people</p>
+
+            <input
+               type="number"
+               min={6}
+               value={singleGuests}
+               onChange={(e) => {
+                const v = Number(e.target.value);
+                  if (v < 6) {
+                  alert("Minimum 6 people required for this catering dish.");
+                  setSingleGuests(6);
+                  } else {
+                   setSingleGuests(v);
+                  }
+              }}
+             className="w-full border p-2 rounded mb-4"
+            />
+
+
+
+
+            <label className="font-semibold block mb-1">Special Requests</label>
+            <textarea
+              value={singleNote}
+              onChange={(e) => setSingleNote(e.target.value)}
+              className="w-full border p-2 rounded mb-4"
+              placeholder="Extra spicy, no onion..."
+            />
+
+            <div className="font-bold text-xl text-green-700 mb-4">
+              Total: ${singleGuests * FIXED_PRICE}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-between">
+              {/* Quick single-item cart */}
+              <button
+                onClick={() => {
+                 addToCart({
+                  id: singleItem.name + '-' + Date.now(),
+                  name: singleItem.name,
+                  packageId: 'single-item',
+                  guests: singleGuests,
+                  price: FIXED_PRICE,   // ✅ price PER PERSON
+                  selections: {
+                   entrees: [],
+                   mains: [],
+                   desserts: [],
+                   specialRequest: singleNote,
+                  },
+                });
+
+
+                  alert('✅ Item added to cart!');
+                  setSingleItem(null);
+                }}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+              >
+                Add This Item to Cart
+              </button>
+
+              {/* Add to manual multi-item order */}
+              <button
+                onClick={() => {
+                  setManualItems((prev) => [
+                    ...prev,
+                    {
+                      item: singleItem,
+                      qty: singleGuests,
+                      note: singleNote,
+                    },
+                  ]);
+                  alert(`${singleItem.name} added to manual order list!`);
+                  setSingleItem(null);
+                }}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                Add to Manual Order
+              </button>
+
+              <button
+                onClick={() => setSingleItem(null)}
+                className="flex-1 text-blue-600 underline px-4 py-2"
+              >
+                Close
               </button>
             </div>
           </div>

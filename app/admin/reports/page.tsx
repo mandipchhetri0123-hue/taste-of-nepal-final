@@ -13,8 +13,56 @@ import {
   orderBy,
   limit,
 } from "firebase/firestore";
-import jsPDF from "jspdf"; // ✅ ADDED FOR PDF EXPORT
+import jsPDF from "jspdf"; // ✅ PDF EXPORT
+// Normalize labels to prevent weird unicode in PDF
+const normalizeLabel = (label: string) => {
+  return String(label)
+    .normalize("NFKD")
+    .replace(/[^\x00-\x7F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
 
+// Master dictionary to unify spellings / variants
+const canonicalNames: Record<string, string> = {
+  // Bhatmas
+  "Bhatmas Sadeko": "Bhatmas Sadheko",
+  "bhatmas sadeko": "Bhatmas Sadheko",
+  "Bhatmas Sadheko": "Bhatmas Sadheko",
+  "bhatmas sadheko": "Bhatmas Sadheko",
+
+  // Lalmohan
+  "Lamohan": "Lalmohan",
+  "lamohan": "Lalmohan",
+  "Lalmohan": "Lalmohan",
+  "lalmohan": "Lalmohan",
+
+  // Peanut
+  "Peanut Sadeko": "Peanut Sadheko",
+  "peanut sadeko": "Peanut Sadheko",
+  "Peanut Sadheko": "Peanut Sadheko",
+  "peanut sadheko": "Peanut Sadheko",
+};
+
+// Turn any raw item label into a single canonical display name
+const canonicalizeItemName = (raw: string): string => {
+  const trimmed = raw.trim();
+
+  // Exact match first
+  if (canonicalNames[trimmed]) return canonicalNames[trimmed];
+
+  // Case-insensitive match
+  const lower = trimmed.toLowerCase();
+  if (canonicalNames[lower]) return canonicalNames[lower];
+
+  // Fallback: just return a nicely trimmed version
+  return trimmed;
+};
+
+
+// ======================
+// TYPES & CONSTANTS
+// ======================
 type OrderDoc = {
   id: string;
   totalAmount?: number;
@@ -27,6 +75,35 @@ type PopularItem = {
   count: number;
 };
 
+type OrderItem = {
+  name?: string;
+  guests?: number;
+  selections?: {
+    entrees?: string[];
+    mains?: string[];
+    desserts?: string[];
+    [key: string]: any;
+  };
+  [key: string]: any;
+};
+
+type StockRow = {
+  name: string;
+  initialStock: number;
+  sold: number;
+  remaining: number;
+};
+
+// Each weekly block for graph
+type WeeklyBlock = {
+  label: string;   // "2025-11-06 to 2025-11-12"
+  revenue: number;
+  orders: number;
+};
+
+// Default starting stock if no explicit initialStock field exists
+const DEFAULT_INITIAL_STOCK = 1500;
+
 export default function Reports() {
   const db = getFirestore(app);
 
@@ -35,6 +112,7 @@ export default function Reports() {
     totalRevenue: number;
     orderCount: number;
     avgOrderValue: number;
+    weeklyBlocks?: WeeklyBlock[];
   } | null>(null);
 
   const [popular, setPopular] = useState<{
@@ -50,6 +128,10 @@ export default function Reports() {
 
   const [messages, setMessages] = useState<any[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // STOCK REPORT STATE
+  const [stockReport, setStockReport] = useState<StockRow[] | null>(null);
+  const [loadingStock, setLoadingStock] = useState(false);
 
   // ======================
   // DATE HANDLING
@@ -99,6 +181,63 @@ export default function Reports() {
   };
 
   // ======================
+  // WEEKLY BLOCK BUILDER (7-day ranges)
+  // ======================
+  const buildWeeklyBlocks = (orders: OrderDoc[]): WeeklyBlock[] => {
+    if (!orders.length) return [];
+
+    // Only orders with createdAt
+    const clean = orders.filter((o) => o.createdAt);
+    if (!clean.length) return [];
+
+    // Sort by createdAt
+    const sorted = [...clean].sort(
+      (a, b) => a.createdAt!.toMillis() - b.createdAt!.toMillis()
+    );
+
+    const startDate = new Date(sorted[0].createdAt!.toMillis());
+    const endDate = new Date(sorted[sorted.length - 1].createdAt!.toMillis());
+
+    const blocks: WeeklyBlock[] = [];
+
+    let blockStart = new Date(startDate);
+    blockStart.setHours(0, 0, 0, 0);
+
+    while (blockStart <= endDate) {
+      const blockEnd = new Date(blockStart);
+      blockEnd.setDate(blockEnd.getDate() + 6); // 7-day block
+      blockEnd.setHours(23, 59, 59, 999);
+
+      const label = `${blockStart.toISOString().slice(0, 10)} to ${blockEnd
+        .toISOString()
+        .slice(0, 10)}`;
+
+      let blockRevenue = 0;
+      let blockOrders = 0;
+
+      clean.forEach((o) => {
+        const t = o.createdAt!.toMillis();
+        if (t >= blockStart.getTime() && t <= blockEnd.getTime()) {
+          blockRevenue += o.totalAmount || 0;
+          blockOrders += 1;
+        }
+      });
+
+      blocks.push({
+        label,
+        revenue: blockRevenue,
+        orders: blockOrders,
+      });
+
+      // move to next 7-day block
+      blockStart.setDate(blockStart.getDate() + 7);
+    }
+
+    return blocks;
+  };
+
+
+  // ======================
   // COMPUTATION
   // ======================
   const computeFromOrders = (orders: OrderDoc[], label: string) => {
@@ -115,21 +254,27 @@ export default function Reports() {
       }
 
       if (Array.isArray(o.items)) {
-        o.items.forEach((item: any) => {
-          const sel = item.selections || {};
+       o.items.forEach((item: any) => {
+        const sel = item.selections || {};
 
-          const bump = (map: Map<string, number>, arr?: string[]) => {
-            if (!Array.isArray(arr)) return;
-            arr.forEach((name) => {
-              map.set(name, (map.get(name) || 0) + 1);
-            });
-          };
+const bump = (map: Map<string, number>, arr?: string[]) => {
+      if (!Array.isArray(arr)) return;
 
-          bump(entreeMap, sel.entrees);
-          bump(mainsMap, sel.mains);
-          bump(dessertsMap, sel.desserts);
-        });
-      }
+      arr.forEach((rawName) => {
+        if (!rawName) return;
+
+        // Convert any spelling into one canonical display name
+        const displayName = canonicalizeItemName(rawName);
+
+        map.set(displayName, (map.get(displayName) || 0) + 1);
+      });
+    };
+
+    bump(entreeMap, sel.entrees);
+    bump(mainsMap, sel.mains);
+    bump(dessertsMap, sel.desserts);
+  });
+}
     });
 
     const avgOrderValue = orderCount > 0 ? totalRevenue / orderCount : 0;
@@ -145,6 +290,7 @@ export default function Reports() {
       totalRevenue,
       orderCount,
       avgOrderValue,
+      weeklyBlocks: buildWeeklyBlocks(orders),
     });
 
     setPopular({
@@ -179,7 +325,7 @@ export default function Reports() {
           ? "Last 7 Days"
           : "Last 30 Days";
 
-      computeFromOrders(orders, label);
+      computeFromOrders(orders, normalizeLabel(label));
     } catch {
       alert("Failed to load sales summary.");
     } finally {
@@ -210,7 +356,8 @@ export default function Reports() {
       const orders: OrderDoc[] = [];
       snap.forEach((d) => orders.push({ id: d.id, ...(d.data() as any) }));
 
-      computeFromOrders(orders, `${customStart} → ${customEnd}`);
+      const label = normalizeLabel(`${customStart} to ${customEnd}`);
+      computeFromOrders(orders, label);
     } catch {
       alert("Failed to load custom range report.");
     } finally {
@@ -243,152 +390,278 @@ export default function Reports() {
   };
 
   // ======================
-  // EXPORT PDF
+  // STOCK REPORT (REAL-TIME)
   // ======================
-  const generatePDF = () => {
-  const doc = new jsPDF();
-  let y = 18;
+  const loadStockReport = async () => {
+    setLoadingStock(true);
+    try {
+      const stockSnap = await getDocs(collection(db, "foodStock"));
 
-  // Safe font
-  doc.setFont("times", "normal");
+      const rows: StockRow[] = [];
 
-  // -----------------------------------
-  // AUTO PAGE BREAK HELPER (with types)
-  // -----------------------------------
-  const addPageIfNeeded = (extraSpace: number = 10): void => {
-    if (y + extraSpace > 280) {
-      doc.addPage();
-      y = 15;
-      doc.setFont("times", "normal");
+      stockSnap.forEach((docSnap) => {
+        const data = docSnap.data() as any;
+
+        const name: string = (data.name as string) || docSnap.id;
+        if (!name) return;
+        if (name.includes("Menu Package")) return; // skip packages
+
+        const remainingRaw = data.stock;
+        const remaining =
+          typeof remainingRaw === "number" && !isNaN(remainingRaw)
+            ? remainingRaw
+            : 0;
+
+        const initialRaw = data.initialStock;
+        const initial =
+          typeof initialRaw === "number" && !isNaN(initialRaw)
+            ? initialRaw
+            : DEFAULT_INITIAL_STOCK;
+
+        const sold = Math.max(initial - remaining, 0);
+
+        rows.push({
+          name,
+          initialStock: initial,
+          sold,
+          remaining,
+        });
+      });
+
+      rows.sort((a, b) => a.name.localeCompare(b.name));
+
+      setStockReport(rows);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to load stock report.");
+    } finally {
+      setLoadingStock(false);
     }
   };
 
-  // -----------------------------------
-  // POPULAR LIST HELPER (with types)
-  // -----------------------------------
-  const addList = (title: string, list: PopularItem[]): void => {
-    addPageIfNeeded(30);
+  // ======================
+  // EXPORT PDF (WITH WEEKLY GRAPH)
+// ======================
+  const generatePDF = () => {
+    // small delay so state is fully updated (fix custom range issue)
+    setTimeout(() => {
+      const doc = new jsPDF();
+      let y = 20;
 
-    doc.setFontSize(14);
-    doc.text(title, 10, y);
-    y += 7;
+      doc.setFont("times", "normal");
 
-    doc.setFontSize(12);
+      const newPage = () => {
+        doc.addPage();
+        y = 20;
+        doc.setFont("times", "normal");
+      };
 
-    list.forEach((item: PopularItem) => {
-      addPageIfNeeded(10);
-      doc.text(`• ${item.name} (${item.count})`, 16, y);
-      y += 6;
-    });
+      const addSpace = (amount = 8) => {
+        y += amount;
+        if (y > 270) newPage();
+      };
 
-    y += 4; 
-  };
+      const writeLine = (text: string, size = 12, indent = 10) => {
+        doc.setFontSize(size);
+        doc.text(text, indent, y);
+        addSpace();
+      };
 
-  // -----------------------------------
-  // HEADER
-  // -----------------------------------
-  doc.setFontSize(20);
-  doc.text("Taste of Nepal - Business Report", 10, y);
-  y += 12;
+      // =======================
+      // HEADER (CENTERED)
+      // =======================
+      doc.setFontSize(22);
+      const title = "Taste of Nepal - Business Report";
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const titleX = pageWidth / 2;
+      doc.text(title, titleX, y, { align: "center" });
+      addSpace(12);
 
+      doc.setFontSize(12);
+      const dateText = `Generated on: ${new Date().toLocaleString()}`;
+      doc.text(dateText, titleX, y, { align: "center" });
+      addSpace(15);
+
+      // =======================
+      // SALES SUMMARY
+      // =======================
+      if (summary) {
+        writeLine("Sales Summary", 18);
+        writeLine(`Range: ${normalizeLabel(summary.label)}`, 14);
+        writeLine(`Total Revenue: $${summary.totalRevenue.toFixed(2)}`);
+        writeLine(`Order Count: ${summary.orderCount}`);
+        writeLine(`Average Order Value: $${summary.avgOrderValue.toFixed(2)}`);
+        addSpace(5);
+
+      
+// =========================================================
+// WEEKLY REVENUE vs ORDERS — FIXED GRAPH POSITION
+// =========================================================
+if (summary.weeklyBlocks && summary.weeklyBlocks.length > 0) {
+  const weekly = summary.weeklyBlocks;
+
+  addSpace(40);  // <<< THIS PUSHES GRAPH DOWN
+
+  doc.setFontSize(16);
+  doc.text(
+    "Weekly Revenue vs Orders (7-Day Blocks)",
+    pageWidth / 2,
+    y,
+    { align: "center" }
+  );
+
+  addSpace(20);
+
+  const graphX = 25;
+  const graphY = y + 80;   // <<< START LOWER TO AVOID OVERLAP
+  const graphWidth = 160;
+  const graphHeight = 60;
+
+  // Axes
+  doc.line(graphX, graphY - graphHeight, graphX, graphY);
+  doc.line(graphX, graphY, graphX + graphWidth, graphY);
+
+  // Scaling
+  let maxRevenue = Math.max(...weekly.map(b => b.revenue), 0);
+  if (maxRevenue < 500) maxRevenue = 500;
+  const yScale = graphHeight / (maxRevenue * 0.6);
+  const xStep = weekly.length > 1 ? graphWidth / (weekly.length - 1) : graphWidth;
+
+  // Y-axis labels
+  doc.setFontSize(8);
+  const ticks = 5;
+  for (let i = 0; i <= ticks; i++) {
+    const value = (maxRevenue / ticks) * i;
+    const yPos = graphY - value * yScale;
+
+    doc.text(String(Math.round(value)), graphX - 15, yPos + 3);
+    doc.line(graphX - 3, yPos, graphX, yPos);
+  }
+
+  // Plot
+  doc.setFillColor(255, 0, 0);
+
+  weekly.forEach((block, index) => {
+    const px = graphX + index * xStep;
+    const py = graphY - block.revenue * yScale;
+
+    doc.circle(px, py, 2, "F");
+
+    if (index > 0) {
+      const prev = weekly[index - 1];
+      const prevX = graphX + (index - 1) * xStep;
+      const prevY = graphY - prev.revenue * yScale;
+      doc.line(prevX, prevY, px, py);
+    }
+
+    // Orders above point
+    doc.text(`(${block.orders})`, px - 5, py - 5);
+
+    // Date labels
+    doc.setFontSize(7);
+    doc.text(block.label, px - 20, graphY + 12);
+  });
+
+  // Move cursor below graph
+  y = graphY + 30;
+
+  // Totals
   doc.setFontSize(12);
-  doc.text(`Generated on: ${new Date().toLocaleString()}`, 10, y);
-  y += 10;
+  doc.text(`Total Revenue: $${summary.totalRevenue.toFixed(2)}`, 10, y);
+  y += 6;
+  doc.text(`Total Orders: ${summary.orderCount}`, 10, y);
+  y += 15;
+}
 
-  // -----------------------------------
-  // SUMMARY SECTION
-  // -----------------------------------
-  if (summary) {
-    addPageIfNeeded(40);
 
-    doc.setFontSize(16);
-    doc.text("Sales Summary", 10, y);
-    y += 10;
-
-    doc.setFontSize(14);
-    doc.text(`Range: ${summary.label}`, 10, y);
-    y += 8;
-
-    doc.setFontSize(12);
-    doc.text(`Total Revenue: $${summary.totalRevenue.toFixed(2)}`, 10, y);
-    y += 6;
-
-    doc.text(`Order Count: ${summary.orderCount}`, 10, y);
-    y += 6;
-
-    doc.text(`Average Order Value: $${summary.avgOrderValue.toFixed(2)}`, 10, y);
-    y += 12;
-  }
-
-  // -----------------------------------
-  // POPULAR ITEMS SECTION
-  // -----------------------------------
-  if (popular) {
-    addPageIfNeeded(60);
-
-    doc.setFontSize(16);
-    doc.text("Popular Items", 10, y);
-    y += 10;
-
-    addList("Top Entrees", popular.entrees);
-    addList("Top Mains", popular.mains);
-    addList("Top Desserts", popular.desserts);
-  }
-
-  // -----------------------------------
-  // CUSTOMER MESSAGES
-  // -----------------------------------
-  if (messages && messages.length > 0) {
-    addPageIfNeeded(80);
-
-    doc.setFontSize(16);
-    doc.text("Customer Messages", 10, y);
-    y += 10;
-
-    messages.forEach((m: any, i: number) => {
-      addPageIfNeeded(25);
-
-      doc.setFontSize(13);
-      doc.text(`${i + 1}. ${m.name || "Unknown Sender"}`, 10, y);
-      y += 6;
-
-      doc.setFontSize(11);
-      doc.text(`Email: ${m.email}`, 12, y);
-      y += 5;
-
-      if (m.subject) {
-        doc.text(`Subject: ${m.subject}`, 12, y);
-        y += 5;
+        
       }
 
-      // message wrap
-      const textLines: string[] = doc.splitTextToSize(m.message, 180);
-      textLines.forEach((line: string) => {
-        addPageIfNeeded(8);
-        doc.text(line, 14, y);
-        y += 5;
-      });
+      // =======================
+      // POPULAR ITEMS
+      // =======================
+      if (popular) {
+        writeLine("Popular Items", 18);
 
-      if (m.createdAt && m.createdAt.toDate) {
-        addPageIfNeeded(8);
-        doc.text(
-          `Sent: ${m.createdAt.toDate().toLocaleString()}`,
-          12,
-          y
+        writeLine("Top Entrees:", 14);
+        popular.entrees.forEach((e) =>
+          writeLine(`• ${e.name} (${e.count})`, 12, 18)
         );
-        y += 8;
+
+        addSpace(5);
+
+        writeLine("Top Mains:", 14);
+        popular.mains.forEach((m) =>
+          writeLine(`• ${m.name} (${m.count})`, 12, 18)
+        );
+
+        addSpace(5);
+
+        writeLine("Top Desserts:", 14);
+        popular.desserts.forEach((d) =>
+          writeLine(`• ${d.name} (${d.count})`, 12, 18)
+        );
+
+        addSpace(10);
       }
 
-      y += 4; // spacing
-    });
-  }
+      // =========================
+      // STOCK REPORT TABLE
+      // =========================
+      if (stockReport && stockReport.length > 0) {
+        writeLine("Stock Report", 18);
 
-  // -----------------------------------
-  // SAVE PDF
-  // -----------------------------------
-  doc.save("TasteOfNepal_BusinessReport.pdf");
-};
+        doc.setFontSize(13);
+        doc.text("Item", 10, y);
+        doc.text("Initial", 70, y);
+        doc.text("Sold", 110, y);
+        doc.text("Remain", 150, y);
+        addSpace(6);
 
+        stockReport.forEach((item) => {
+          doc.setFontSize(11);
+          doc.text(item.name, 10, y);
+          doc.text(String(item.initialStock), 70, y);
+          doc.text(String(item.sold), 110, y);
+          doc.text(String(item.remaining), 150, y);
+          addSpace(6);
+        });
+
+        addSpace(10);
+      }
+
+      // =======================
+      // CUSTOMER MESSAGES
+      // =======================
+      if (messages && messages.length > 0) {
+        writeLine("Customer Messages", 18);
+
+        messages.forEach((m, index) => {
+          writeLine(`${index + 1}. ${m.name || "Unknown Sender"}`, 14);
+          writeLine(`Email: ${m.email}`, 12, 18);
+
+          if (m.subject) writeLine(`Subject: ${m.subject}`, 12, 18);
+
+          const messageLines = doc.splitTextToSize(m.message, 180);
+          messageLines.forEach((line: string) => {
+            writeLine(line, 11, 18);
+          });
+
+          if (m.createdAt) {
+            writeLine(
+              `Sent: ${m.createdAt.toDate().toLocaleString()}`,
+              11,
+              18
+            );
+          }
+
+          addSpace(6);
+        });
+      }
+
+      doc.save("TasteOfNepal_BusinessReport.pdf");
+    }, 150);
+  };
 
   // ======================
   // UI
@@ -458,7 +731,9 @@ export default function Reports() {
                   <h3 className="font-semibold text-gray-700 mb-1">
                     Number of Orders
                   </h3>
-                  <p className="text-2xl font-bold">{summary.orderCount}</p>
+                  <p className="text-2xl font-bold">
+                    {summary.orderCount}
+                  </p>
                 </div>
 
                 <div className="border rounded p-4 bg-gray-50">
@@ -513,6 +788,60 @@ export default function Reports() {
           </div>
         </section>
 
+        {/* REAL-TIME STOCK REPORT */}
+        <section className="bg-white p-6 rounded shadow">
+          <h2 className="text-2xl font-semibold mb-4">
+            Real-Time Stock Report
+          </h2>
+
+          <button
+            onClick={loadStockReport}
+            className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 mb-4"
+            disabled={loadingStock}
+          >
+            {loadingStock ? "Loading..." : "Load Stock Report"}
+          </button>
+
+          {!stockReport && !loadingStock && (
+            <p className="text-gray-500">No stock report loaded yet.</p>
+          )}
+
+          {stockReport && (
+            <div className="overflow-x-auto mt-4">
+              <table className="w-full border text-sm">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-2 border">Item</th>
+                    <th className="p-2 border">Initial Stock</th>
+                    <th className="p-2 border">Sold</th>
+                    <th className="p-2 border">Remaining</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockReport.map((row) => (
+                    <tr key={row.name}>
+                      <td className="p-2 border">{row.name}</td>
+                      <td className="p-2 border">{row.initialStock}</td>
+                      <td className="p-2 border text-red-600">
+                        {row.sold}
+                      </td>
+                      <td
+                        className={`p-2 border ${
+                          row.remaining < 20
+                            ? "text-red-600 font-bold"
+                            : "text-green-700"
+                        }`}
+                      >
+                        {row.remaining}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
         {/* POPULAR ITEMS */}
         <section className="bg-white p-6 rounded shadow">
           <h2 className="text-2xl font-semibold mb-4">
@@ -521,8 +850,8 @@ export default function Reports() {
 
           {!popular && (
             <p className="text-gray-500">
-              Run any Sales Summary or Date Range report above to see popular
-              items here.
+              Run any Sales Summary or Date Range report above to see
+              popular items here.
             </p>
           )}
 
@@ -535,7 +864,8 @@ export default function Reports() {
                   {popular.entrees.map((e) => (
                     <li key={e.name}>
                       {e.name} —{" "}
-                      <span className="font-semibold">{e.count}</span> orders
+                      <span className="font-semibold">{e.count}</span>{" "}
+                      orders
                     </li>
                   ))}
                 </ul>
@@ -548,7 +878,8 @@ export default function Reports() {
                   {popular.mains.map((m) => (
                     <li key={m.name}>
                       {m.name} —{" "}
-                      <span className="font-semibold">{m.count}</span> orders
+                      <span className="font-semibold">{m.count}</span>{" "}
+                      orders
                     </li>
                   ))}
                 </ul>
@@ -561,7 +892,8 @@ export default function Reports() {
                   {popular.desserts.map((d) => (
                     <li key={d.name}>
                       {d.name} —{" "}
-                      <span className="font-semibold">{d.count}</span> orders
+                      <span className="font-semibold">{d.count}</span>{" "}
+                      orders
                     </li>
                   ))}
                 </ul>
@@ -590,7 +922,10 @@ export default function Reports() {
 
           <div className="space-y-4">
             {messages.map((m) => (
-              <div key={m.id} className="border rounded p-4 bg-gray-50 text-sm">
+              <div
+                key={m.id}
+                className="border rounded p-4 bg-gray-50 text-sm"
+              >
                 <h3 className="font-semibold text-lg mb-1">
                   {m.name || "Unknown Sender"}
                 </h3>
@@ -602,7 +937,9 @@ export default function Reports() {
                     <strong>Subject:</strong> {m.subject}
                   </p>
                 )}
-                <p className="mt-2 whitespace-pre-line">{m.message}</p>
+                <p className="mt-2 whitespace-pre-line">
+                  {m.message}
+                </p>
                 {m.createdAt && (
                   <p className="text-xs text-gray-500 mt-2">
                     Sent: {m.createdAt.toDate().toLocaleString()}
