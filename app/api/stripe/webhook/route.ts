@@ -115,7 +115,6 @@ export async function POST(req: NextRequest) {
           const selectedNames = selections[category] || [];
 
           for (const dishName of selectedNames) {
-            // doc id in foodStock is the dish name (e.g., "Pakoda")
             const stockRef =
               adminDB
                 .collection("foodStock")
@@ -150,38 +149,34 @@ export async function POST(req: NextRequest) {
       console.error("❌ Global stock update error:", err.message);
       // Do not fail the webhook – payment + order already processed
     }
-
-   // ------------------------------------
-// 2.5️⃣ SAFE STRIPE RECEIPT URL FETCH (NO TS ERRORS)
+// ------------------------------------
+// 2.5️⃣ FETCH STRIPE RECEIPT URL (NO TS ERRORS)
 // ------------------------------------
 let receiptUrl: string | null = null;
 
 try {
   if (session.payment_intent) {
-    const paymentIntentId =
+    const piId =
       typeof session.payment_intent === "string"
         ? session.payment_intent
         : session.payment_intent.id;
 
-    // Stripe Response wrapper must be cast safely
-    const piResponse: any = await stripe.paymentIntents.retrieve(
-      paymentIntentId,
-      { expand: ["charges"] }
-    );
+    // Force TypeScript to treat it as a PaymentIntent
+    const paymentIntent = (await stripe.paymentIntents.retrieve(piId, {
+      expand: ["charges"],
+    })) as any;  // 👈 IMPORTANT FIX
 
-    // Real PaymentIntent is inside .data
-    const paymentIntent = piResponse.data ?? piResponse;
+    const charge = paymentIntent?.charges?.data?.[0];
 
-    const charge = paymentIntent.charges?.data?.[0];
     if (charge?.receipt_url) {
       receiptUrl = charge.receipt_url;
       console.log("🧾 Receipt URL:", receiptUrl);
     } else {
-      console.log("ℹ️ No receipt URL found on charge.");
+      console.log("ℹ️ No receipt URL available.");
     }
   }
 } catch (err) {
-  console.error("❌ Failed to fetch Stripe receipt URL:", err);
+  console.error("❌ Receipt fetch failed:", err);
 }
 
 
@@ -190,7 +185,6 @@ try {
     // ------------------------------------
     if (customerEmail) {
       try {
-        // Format each ordered package
         const formattedItems = items
           .map((item: any) => {
             const ents = item.selections?.entrees?.join(", ") || "None";

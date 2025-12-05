@@ -11,7 +11,7 @@ type MenuItem = {
   image: string;
   price?: number;
   stock?: number;
-  category?: string;
+  category?: 'entrees' | 'mains' | 'desserts';
   packageName?: string;
 };
 
@@ -63,9 +63,12 @@ export default function MenuPage() {
     { item: MenuItem; qty: number; note: string }[]
   >([]);
 
-  // All food items cost $5/person for manual/single orders
-  const FIXED_PRICE = 10;
+  // All food items cost $1/person for manual/single orders
+  const FIXED_PRICE = 1;
 
+  // =========================
+  // LOAD PACKAGES
+  // =========================
   useEffect(() => {
     async function load() {
       try {
@@ -98,13 +101,14 @@ export default function MenuPage() {
 
   const pkg = packages[activeTab];
 
-  // 👉 Collect ALL food items from ALL packages
+  // =========================
+  // COLLECT ALL ITEMS (for search)
+  // =========================
   const getAllItems = () => {
     const all: MenuItem[] = [];
 
     Object.values(packages).forEach((pkg) => {
       (['entrees', 'mains', 'desserts'] as const).forEach((cat) => {
-        // @ts-ignore dynamic access is safe
         pkg.options[cat].forEach((item: MenuItem) => {
           all.push({
             ...item,
@@ -118,7 +122,9 @@ export default function MenuPage() {
     return all;
   };
 
-  // 🔍 Smart search (handles momo / c momo / spaces)
+  // =========================
+  // SMART SEARCH (DEDUP ACROSS PACKAGES)
+  // =========================
   const smartSearch = (query: string) => {
     const q = query.toLowerCase().trim();
     if (!q) {
@@ -130,30 +136,33 @@ export default function MenuPage() {
 
     const results = all.filter((item) => {
       const name = (item.name || '').toLowerCase();
-
       if (!name) return false;
 
-      // Normalised (remove spaces)
       const n1 = name.replace(/\s+/g, '');
       const q1 = q.replace(/\s+/g, '');
 
-      // Direct match
       if (name.includes(q)) return true;
-
-      // Space-insensitive (momo vs c momo vs cmomo)
       if (n1.includes(q1)) return true;
 
-      // Match any word starting with query (sadeko -> bhatmas sadeko)
       const parts = name.split(' ');
       if (parts.some((p) => p.startsWith(q))) return true;
 
       return false;
     });
 
-    setSearchResults(results);
+    // Remove duplicates (same dish name from multiple packages)
+    const unique: Record<string, MenuItem> = {};
+    results.forEach((item) => {
+      const key = item.name.toLowerCase().replace(/\s+/g, '');
+      if (!unique[key]) unique[key] = item;
+    });
+
+    setSearchResults(Object.values(unique));
   };
 
-  // ✔ ORIGINAL checkbox logic
+  // =========================
+  // PACKAGE CHECKBOX HANDLER
+  // =========================
   const handleCheckbox = (
     category: 'entrees' | 'mains' | 'desserts',
     itemName: string,
@@ -181,7 +190,9 @@ export default function MenuPage() {
     });
   };
 
-  // ✔ ORIGINAL package Add to Cart with stock validation
+  // =========================
+  // PACKAGE ADD TO CART
+  // =========================
   const handleAddToCart = () => {
     if (!selectedPackage) return;
 
@@ -228,9 +239,17 @@ export default function MenuPage() {
     setGuests(selectedPackage.minGuests);
   };
 
-  // Total for manual multi-item order (for display)
-  const manualTotal = manualItems.reduce((sum, m) => sum + m.qty * FIXED_PRICE, 0);
+  // =========================
+  // MANUAL ORDER TOTAL
+  // =========================
+  const manualTotal = manualItems.reduce(
+    (sum, m) => sum + m.qty * FIXED_PRICE,
+    0
+  );
 
+  // ===================================================================
+  // RENDER
+  // ===================================================================
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       {/* 🔍 GLOBAL SEARCH BAR */}
@@ -295,13 +314,29 @@ export default function MenuPage() {
 
           {manualItems.map((m, i) => (
             <div key={i} className="border p-3 rounded mb-3">
-              <p className="font-semibold text-lg">{m.item.name}</p>
+              <p className="font-semibold text-lg">
+                {m.item.name}{' '}
+                <span className="text-gray-500 text-sm">
+                  ({m.item.category})
+                </span>
+              </p>
+
               <p>
                 People: {m.qty} × ${FIXED_PRICE} = ${m.qty * FIXED_PRICE}
               </p>
+
               {m.note && (
                 <p className="text-sm text-gray-600 mt-1">Note: {m.note}</p>
               )}
+
+              <button
+                onClick={() =>
+                  setManualItems((prev) => prev.filter((_, idx) => idx !== i))
+                }
+                className="mt-2 bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+              >
+                Remove Item
+              </button>
             </div>
           ))}
 
@@ -309,18 +344,19 @@ export default function MenuPage() {
 
           <button
             onClick={() => {
-              // Add each manual item as its own cart item
               manualItems.forEach((m, idx) => {
                 addToCart({
                   id: `${m.item.name}-${Date.now()}-${idx}`,
-                  packageId: 'single-item',
+                  packageId: 'single-item', // manual orders are separate from packages
                   name: m.item.name,
-                  price: m.qty * FIXED_PRICE,
+                  price: FIXED_PRICE, // $1 per person
                   guests: m.qty,
                   selections: {
-                    entrees: [],
-                    mains: [],
-                    desserts: [],
+                    entrees:
+                      m.item.category === 'entrees' ? [m.item.name] : [],
+                    mains: m.item.category === 'mains' ? [m.item.name] : [],
+                    desserts:
+                      m.item.category === 'desserts' ? [m.item.name] : [],
                     specialRequest: m.note,
                   },
                 });
@@ -339,7 +375,8 @@ export default function MenuPage() {
       {/* FEATURED SECTION (unchanged) */}
       <section className="max-w-6xl mx-auto px-4 pt-12 pb-16">
         <h2 className="text-4xl font-heading font-bold text-center mb-10">
-          Our Signature Catering Dishe        </h2>
+          Our Signature Catering Dishes
+        </h2>
 
         <div className="grid md:grid-cols-3 gap-10">
           <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-100">
@@ -349,8 +386,12 @@ export default function MenuPage() {
               alt="Fried Chicken"
             />
             <div className="p-6">
-              <h3 className="text-2xl font-bold text-red-600 mb-2">Fried Chicken</h3>
-              <p className="text-gray-600">Crispy and flavour-packed chicken for events.</p>
+              <h3 className="text-2xl font-bold text-red-600 mb-2">
+                Fried Chicken
+              </h3>
+              <p className="text-gray-600">
+                Crispy and flavour-packed chicken for events.
+              </p>
             </div>
           </div>
 
@@ -361,8 +402,12 @@ export default function MenuPage() {
               alt="Chicken Choila"
             />
             <div className="p-6">
-              <h3 className="text-2xl font-bold text-red-600 mb-2">Chicken Choila</h3>
-              <p className="text-gray-600">Classic Nepali grilled spiced chicken.</p>
+              <h3 className="text-2xl font-bold text-red-600 mb-2">
+                Chicken Choila
+              </h3>
+              <p className="text-gray-600">
+                Classic Nepali grilled spiced chicken.
+              </p>
             </div>
           </div>
 
@@ -373,8 +418,12 @@ export default function MenuPage() {
               alt="Goat Curry"
             />
             <div className="p-6">
-              <h3 className="text-2xl font-bold text-red-600 mb-2">Goat Curry</h3>
-              <p className="text-gray-600">Slow-cooked tender goat in rich spices.</p>
+              <h3 className="text-2xl font-bold text-red-600 mb-2">
+                Goat Curry
+              </h3>
+              <p className="text-gray-600">
+                Slow-cooked tender goat in rich spices.
+              </p>
             </div>
           </div>
         </div>
@@ -385,7 +434,7 @@ export default function MenuPage() {
         Choose one of our packages below and customize it for your event.
       </p>
 
-      {/* Tabs (unchanged) */}
+      {/* Tabs */}
       <div className="flex justify-center border-b mb-8">
         {(['standard', 'premium', 'deluxe'] as const).map((tab) => (
           <button
@@ -405,11 +454,13 @@ export default function MenuPage() {
         ))}
       </div>
 
-      {/* Package Card (unchanged) */}
+      {/* Package Card */}
       <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md text-center">
         <h2 className="text-2xl font-bold mb-2">{pkg.name}</h2>
         <p className="text-gray-600">${pkg.price} per person</p>
-        <p className="mt-3 text-gray-700">Minimum {pkg.minGuests} guests required.</p>
+        <p className="mt-3 text-gray-700">
+          Minimum {pkg.minGuests} guests required.
+        </p>
 
         <button
           onClick={() => {
@@ -428,13 +479,16 @@ export default function MenuPage() {
         </button>
       </div>
 
-      {/* Package Modal (unchanged except layout tweaks from original) */}
+      {/* Package Modal */}
       {selectedPackage && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 px-4">
           <div className="bg-white max-w-3xl w-full rounded-lg shadow-lg p-8 overflow-y-auto max-h-[90vh]">
-            <h1 className="text-3xl font-bold text-center mb-2">{selectedPackage.name}</h1>
+            <h1 className="text-3xl font-bold text-center mb-2">
+              {selectedPackage.name}
+            </h1>
             <p className="text-center text-gray-500 mb-6">
-              ${selectedPackage.price} per person (Min {selectedPackage.minGuests} guests)
+              ${selectedPackage.price} per person (Min{' '}
+              {selectedPackage.minGuests} guests)
             </p>
 
             {/* Guests */}
@@ -447,7 +501,9 @@ export default function MenuPage() {
                 min={selectedPackage.minGuests}
                 value={guests}
                 onChange={(e) =>
-                  setGuests(Number(e.target.value) || selectedPackage.minGuests)
+                  setGuests(
+                    Number(e.target.value) || selectedPackage.minGuests
+                  )
                 }
                 className="w-full p-3 border rounded"
               />
@@ -477,7 +533,11 @@ export default function MenuPage() {
                           disabled={outOfStock}
                           checked={selectedItems[cat].includes(item.name)}
                           onChange={() =>
-                            handleCheckbox(cat, item.name, selectedPackage.limits[cat])
+                            handleCheckbox(
+                              cat,
+                              item.name,
+                              selectedPackage.limits[cat]
+                            )
                           }
                           className="mt-1"
                         />
@@ -508,7 +568,9 @@ export default function MenuPage() {
 
             {/* Special Requests */}
             <div className="mb-6">
-              <label className="block text-lg font-semibold mb-2">Special Requests</label>
+              <label className="block text-lg font-semibold mb-2">
+                Special Requests
+              </label>
               <textarea
                 value={selectedItems.specialRequest}
                 onChange={(e) =>
@@ -563,30 +625,33 @@ export default function MenuPage() {
               Price per person: ${FIXED_PRICE}
             </p>
 
-            <label className="font-semibold block mb-1">Number of People</label>
+            <label className="font-semibold block mb-1">
+              Number of People
+            </label>
 
-            <p className="text-sm text-gray-600 mt-1">Minimum order: 6 people</p>
+            <p className="text-sm text-gray-600 mt-1">
+              Minimum order: 6 people
+            </p>
 
             <input
-               type="number"
-               min={6}
-               value={singleGuests}
-               onChange={(e) => {
+              type="number"
+              min={6}
+              value={singleGuests}
+              onChange={(e) => {
                 const v = Number(e.target.value);
-                  if (v < 6) {
-                  alert("Minimum 6 people required for this catering dish.");
+                if (v < 6) {
+                  alert('Minimum 6 people required for this catering dish.');
                   setSingleGuests(6);
-                  } else {
-                   setSingleGuests(v);
-                  }
+                } else {
+                  setSingleGuests(v);
+                }
               }}
-             className="w-full border p-2 rounded mb-4"
+              className="w-full border p-2 rounded mb-4"
             />
 
-
-
-
-            <label className="font-semibold block mb-1">Special Requests</label>
+            <label className="font-semibold block mb-1">
+              Special Requests
+            </label>
             <textarea
               value={singleNote}
               onChange={(e) => setSingleNote(e.target.value)}
@@ -602,20 +667,28 @@ export default function MenuPage() {
               {/* Quick single-item cart */}
               <button
                 onClick={() => {
-                 addToCart({
-                  id: singleItem.name + '-' + Date.now(),
-                  name: singleItem.name,
-                  packageId: 'single-item',
-                  guests: singleGuests,
-                  price: FIXED_PRICE,   // ✅ price PER PERSON
-                  selections: {
-                   entrees: [],
-                   mains: [],
-                   desserts: [],
-                   specialRequest: singleNote,
-                  },
-                });
+                  // Auto-assign package by guests: <15 standard, 15–19 premium, 20+ deluxe
+                  let autoPackage: PackageKey = 'standard';
+                  if (singleGuests >= 20) autoPackage = 'deluxe';
+                  else if (singleGuests >= 15) autoPackage = 'premium';
 
+                  const category = singleItem.category;
+
+                  addToCart({
+                    id: singleItem.name + '-' + Date.now(),
+                    name: singleItem.name,
+                    packageId: autoPackage,
+                    guests: singleGuests,
+                    price: FIXED_PRICE,
+                    selections: {
+                      entrees:
+                        category === 'entrees' ? [singleItem.name] : [],
+                      mains: category === 'mains' ? [singleItem.name] : [],
+                      desserts:
+                        category === 'desserts' ? [singleItem.name] : [],
+                      specialRequest: singleNote,
+                    },
+                  });
 
                   alert('✅ Item added to cart!');
                   setSingleItem(null);
