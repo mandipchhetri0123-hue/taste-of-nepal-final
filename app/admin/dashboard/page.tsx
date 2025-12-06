@@ -76,6 +76,15 @@ export default function AdminDashboard() {
             <h2 className="text-xl font-semibold">Manage Stock</h2>
             <p className="text-gray-600 mt-2">Adjust global stock for each food item.</p>
           </Link>
+
+          <Link
+  href="/admin/manage-users"
+  className="p-6 bg-white border rounded-lg shadow-lg text-center hover:bg-gray-50 transition"
+>
+  <h2 className="text-xl font-semibold">Manage Users</h2>
+  <p className="text-gray-600 mt-2">Search users & change roles.</p>
+</Link>
+
         </div>
       </div>
     </AdminRoute>
