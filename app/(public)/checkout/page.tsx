@@ -1,22 +1,22 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useCart } from '@/context/CartContext';
 import { useRouter } from 'next/navigation';
 import { getAuth } from 'firebase/auth';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { app } from '@/lib/firebase';
 
 export default function CheckoutPage() {
   const { cart } = useCart();
   const router = useRouter();
   const auth = getAuth(app);
+  const db = getFirestore(app);
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
 
-  // -----------------------------
-  // NEW: AU Address Fields
-  // -----------------------------
+  // NEW Address fields (unit + street combined)
   const [address, setAddress] = useState<{
     street?: string;
     suburb?: string;
@@ -32,6 +32,46 @@ export default function CheckoutPage() {
     [cart]
   );
 
+  // ===============================================
+  // 🚀 AUTO-FILL USER INFO FROM FIREBASE
+  // ===============================================
+  useEffect(() => {
+    const loadUserInfo = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const ref = doc(db, 'users', user.uid);
+      const snap = await getDoc(ref);
+
+      if (!snap.exists()) return;
+
+      const data = snap.data();
+
+      // Full Name
+      const f = data.firstName || '';
+      const l = data.lastName || '';
+      setFullName(`${f} ${l}`.trim());
+
+      // Phone
+      setPhone(data.phone || '');
+
+      // Address
+      if (data.address) {
+        setAddress({
+          street: data.address.street || '',
+          suburb: data.address.suburb || '',
+          state: data.address.state || '',
+          postcode: data.address.postcode || '',
+        });
+      }
+    };
+
+    loadUserInfo();
+  }, []);
+
+  // ===============================================
+  // IF CART EMPTY
+  // ===============================================
   if (cart.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center">
@@ -46,54 +86,57 @@ export default function CheckoutPage() {
     );
   }
 
-  // ============================================================
-  // FORM SUBMISSION
-  // ============================================================
+  // ===============================================
+  // FORM SUBMIT
+  // ===============================================
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!fullName || !phone || !address.street || !address.suburb || !address.state || !address.postcode) {
-      alert("Please fill in Full Name, Phone, and all Address fields.");
+    if (
+      !fullName ||
+      !phone ||
+      !address.street ||
+      !address.suburb ||
+      !address.state ||
+      !address.postcode
+    ) {
+      alert('Please fill in Full Name, Phone, and all Address fields.');
       return;
     }
 
     const user = auth.currentUser;
-
     if (!user) {
-      alert("Please login before placing an order.");
-      router.push("/login");
+      alert('Please login before placing an order.');
+      router.push('/login');
       return;
     }
 
     setSaving(true);
 
-    // Convert multi-field address → old 1-line format
+    // Convert address into old single-line format
     const finalAddress = `${address.street}, ${address.suburb}, ${address.state} ${address.postcode}`;
 
-    // Save data for payment page
     sessionStorage.setItem(
-      "checkoutCustomer",
+      'checkoutCustomer',
       JSON.stringify({
         fullName,
         phone,
-        address: finalAddress, // 👈 stored as single string (compatible with old system)
+        address: finalAddress,
         note,
       })
     );
 
-    setTimeout(() => {
-      router.push("/checkout/payment");
-    }, 50);
+    setTimeout(() => router.push('/checkout/payment'), 50);
   };
 
-  // ============================================================
+  // ===============================================
   // UI
-  // ============================================================
+  // ===============================================
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-6">Checkout</h1>
 
-      {/* Order Summary */}
+      {/* ORDER SUMMARY */}
       <div className="mb-8 p-4 border rounded bg-gray-50">
         <h2 className="text-xl font-semibold mb-3">Order Summary</h2>
 
@@ -106,15 +149,12 @@ export default function CheckoutPage() {
           ))}
         </ul>
 
-        <p className="mt-3 font-bold">
-          Total: ${total.toFixed(2)}
-        </p>
+        <p className="mt-3 font-bold">Total: ${total.toFixed(2)}</p>
       </div>
 
-      {/* Checkout Form */}
+      {/* CHECKOUT FORM */}
       <form onSubmit={handleSubmit} className="space-y-4">
-
-        {/* Full Name */}
+        {/* FULL NAME */}
         <div>
           <label className="block font-semibold mb-1">
             Full Name<span className="text-red-500">*</span>
@@ -124,11 +164,10 @@ export default function CheckoutPage() {
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Your full name"
-            required
           />
         </div>
 
-        {/* Phone */}
+        {/* PHONE */}
         <div>
           <label className="block font-semibold mb-1">
             Phone Number<span className="text-red-500">*</span>
@@ -137,51 +176,43 @@ export default function CheckoutPage() {
             className="border p-2 w-full rounded"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="e.g. 04xx xxx xxx"
-            required
+            placeholder="e.g. +61412345678"
           />
         </div>
 
-        {/* ---------------------------
-             NEW AU STYLE ADDRESS FIELDS
-           --------------------------- */}
+        {/* ADDRESS */}
         <div>
           <label className="block font-semibold mb-1">
             Delivery / Event Address<span className="text-red-500">*</span>
           </label>
 
-          {/* Row 1 */}
           <div className="grid md:grid-cols-2 gap-4 mb-2">
             <input
               className="border p-2 rounded w-full"
               placeholder="Unit / Street Address"
-              value={address.street || ""}
+              value={address.street || ''}
               onChange={(e) =>
                 setAddress((prev) => ({ ...prev, street: e.target.value }))
               }
-              required
             />
 
             <input
               className="border p-2 rounded w-full"
               placeholder="Suburb"
-              value={address.suburb || ""}
+              value={address.suburb || ''}
               onChange={(e) =>
                 setAddress((prev) => ({ ...prev, suburb: e.target.value }))
               }
-              required
             />
           </div>
 
-          {/* Row 2 */}
           <div className="grid md:grid-cols-2 gap-4">
             <select
               className="border p-2 rounded w-full"
-              value={address.state || ""}
+              value={address.state || ''}
               onChange={(e) =>
                 setAddress((prev) => ({ ...prev, state: e.target.value }))
               }
-              required
             >
               <option value="">State</option>
               <option value="NSW">NSW</option>
@@ -197,21 +228,18 @@ export default function CheckoutPage() {
             <input
               className="border p-2 rounded w-full"
               placeholder="Postcode"
-              value={address.postcode || ""}
+              value={address.postcode || ''}
               maxLength={4}
               onChange={(e) =>
                 setAddress((prev) => ({ ...prev, postcode: e.target.value }))
               }
-              required
             />
           </div>
         </div>
 
-        {/* Extra Notes */}
+        {/* NOTES */}
         <div>
-          <label className="block font-semibold mb-1">
-            Extra Notes (optional)
-          </label>
+          <label className="block font-semibold mb-1">Extra Notes (optional)</label>
           <textarea
             className="border p-2 w-full rounded"
             value={note}
@@ -226,7 +254,7 @@ export default function CheckoutPage() {
           disabled={saving}
           className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 w-full disabled:opacity-60"
         >
-          {saving ? "Processing…" : "Proceed to Payment"}
+          {saving ? 'Processing…' : 'Proceed to Payment'}
         </button>
       </form>
     </div>

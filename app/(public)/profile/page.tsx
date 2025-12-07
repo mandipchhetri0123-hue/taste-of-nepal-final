@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, ChangeEvent } from "react";
+import { useEffect, useState } from "react";
 import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import {
   getFirestore,
@@ -19,13 +19,20 @@ import { app } from "@/firebase/config";
 // ==========================
 // TYPES
 // ==========================
+type Address = {
+  unit?: string;
+  street?: string;
+  suburb?: string;
+  state?: string;
+  postcode?: string;
+};
+
 type UserData = {
   firstName?: string;
   lastName?: string;
   email?: string;
   phone?: string;
-  gender?: string;
-  dob?: string;
+  address?: Address;
 };
 
 type OrderData = {
@@ -50,7 +57,6 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // ORDER HISTORY STATES
   const [orderHistory, setOrderHistory] = useState<OrderData[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -89,10 +95,18 @@ export default function ProfilePage() {
   };
 
   // ==========================
-  // INPUT UPDATE HANDLER
+  // INPUT HANDLER
   // ==========================
   const handleChange = (field: keyof UserData, value: string) => {
     setUserData((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const handleAddressChange = (field: keyof Address, value: string) => {
+    setUserData((prev) =>
+      prev
+        ? { ...prev, address: { ...prev.address, [field]: value } }
+        : prev
+    );
   };
 
   // ==========================
@@ -119,8 +133,7 @@ export default function ProfilePage() {
         firstName: userData.firstName,
         lastName: userData.lastName,
         phone: userData.phone,
-        gender: userData.gender,
-        dob: userData.dob,
+        address: userData.address || {},
       });
 
       alert("Profile updated!");
@@ -134,7 +147,7 @@ export default function ProfilePage() {
   };
 
   // ==========================
-  // ORDER HISTORY — FIRESTORE
+  // ORDER HISTORY
   // ==========================
   const loadOrderHistory = async () => {
     if (!auth.currentUser) return;
@@ -162,9 +175,6 @@ export default function ProfilePage() {
     setLoadingOrders(false);
   };
 
-  // ==========================
-  // DATE FORMATTER
-  // ==========================
   const formatDate = (ts: any) => {
     if (!ts) return "";
     const d = ts.toDate();
@@ -172,7 +182,7 @@ export default function ProfilePage() {
   };
 
   // ==========================
-  // LOADING SCREEN
+  // LOADING UI
   // ==========================
   if (loading) {
     return (
@@ -196,6 +206,8 @@ export default function ProfilePage() {
     );
   }
 
+  const addr = userData.address || {};
+
   // ==========================
   // MAIN PROFILE UI
   // ==========================
@@ -203,7 +215,6 @@ export default function ProfilePage() {
     <div className="max-w-2xl mx-auto bg-white shadow-lg rounded-lg p-8 mt-12">
       <h1 className="text-4xl font-bold text-center mb-8">My Profile</h1>
 
-      {/* Profile Fields */}
       <div className="space-y-4">
         {/* FIRST NAME */}
         <div>
@@ -250,46 +261,80 @@ export default function ProfilePage() {
               value={userData.phone || ""}
               onChange={(e) => handleChange("phone", e.target.value)}
               className="border p-2 w-full rounded"
-              placeholder="+61412345678"
             />
           ) : (
             <p className="text-lg">{userData.phone || "Not provided"}</p>
           )}
         </div>
 
-        {/* GENDER */}
-        <div>
-          <h2 className="text-gray-600 text-sm font-semibold">Gender:</h2>
-          {editMode ? (
-            <select
-              value={userData.gender || ""}
-              onChange={(e) => handleChange("gender", e.target.value)}
-              className="border p-2 w-full rounded"
-            >
-              <option value="">Select...</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
-            </select>
-          ) : (
-            <p className="text-lg">{userData.gender || "Not specified"}</p>
-          )}
-        </div>
+        {/* ADDRESS SECTION */}
+<div className="pt-4">
+  <h2 className="text-xl font-bold mb-2">Address</h2>
 
-        {/* DOB */}
-        <div>
-          <h2 className="text-gray-600 text-sm font-semibold">Date of Birth:</h2>
-          {editMode ? (
-            <input
-              type="date"
-              value={userData.dob || ""}
-              onChange={(e) => handleChange("dob", e.target.value)}
-              className="border p-2 w-full rounded"
-            />
-          ) : (
-            <p className="text-lg">{userData.dob || "Not specified"}</p>
-          )}
-        </div>
+  {/* STREET (combined unit + street in one field) */}
+  <div>
+    <h3 className="text-gray-600 text-sm font-semibold">
+      Unit / Street Address:
+    </h3>
+    {editMode ? (
+      <input
+        type="text"
+        value={addr.street || ""}
+        onChange={(e) => handleAddressChange("street", e.target.value)}
+        className="border p-2 w-full rounded"
+        placeholder="Example: Unit 2 / 15 George Street"
+      />
+    ) : (
+      <p className="text-lg">{addr.street || "N/A"}</p>
+    )}
+  </div>
+
+  {/* SUBURB */}
+  <div>
+    <h3 className="text-gray-600 text-sm font-semibold">Suburb:</h3>
+    {editMode ? (
+      <input
+        type="text"
+        value={addr.suburb || ""}
+        onChange={(e) => handleAddressChange("suburb", e.target.value)}
+        className="border p-2 w-full rounded"
+      />
+    ) : (
+      <p className="text-lg">{addr.suburb || "N/A"}</p>
+    )}
+  </div>
+
+  {/* STATE */}
+  <div>
+    <h3 className="text-gray-600 text-sm font-semibold">State:</h3>
+    {editMode ? (
+      <input
+        type="text"
+        value={addr.state || ""}
+        onChange={(e) => handleAddressChange("state", e.target.value)}
+        className="border p-2 w-full rounded"
+      />
+    ) : (
+      <p className="text-lg">{addr.state || "N/A"}</p>
+    )}
+  </div>
+
+  {/* POSTCODE */}
+  <div>
+    <h3 className="text-gray-600 text-sm font-semibold">Postcode:</h3>
+    {editMode ? (
+      <input
+        type="text"
+        value={addr.postcode || ""}
+        onChange={(e) => handleAddressChange("postcode", e.target.value)}
+        className="border p-2 w-full rounded"
+      />
+    ) : (
+      <p className="text-lg">{addr.postcode || "N/A"}</p>
+    )}
+  </div>
+</div>
+
 
         {/* BUTTONS */}
         <div className="flex justify-between pt-6">
@@ -338,7 +383,7 @@ export default function ProfilePage() {
         </button>
       </div>
 
-      {/* ORDER HISTORY SECTION */}
+      {/* ORDER HISTORY */}
       {showHistory && (
         <div className="mt-10 bg-gray-50 p-6 rounded-lg">
           <h2 className="text-3xl font-bold mb-4">Order History</h2>
@@ -364,43 +409,16 @@ export default function ProfilePage() {
               <h4 className="mt-4 font-bold text-lg">Items:</h4>
 
               {order.items?.map((item, i) => (
-                <div
-                  key={i}
-                  className="ml-4 mt-3 p-3 border rounded bg-gray-50"
-                >
+                <div key={i} className="ml-4 mt-3 p-3 border rounded bg-gray-50">
                   <p className="font-semibold text-lg">
                     {item.packageName || item.name}
                   </p>
-
                   <p className="text-sm">
                     Guests: <strong>{item.guests}</strong>
                   </p>
-
                   <p className="text-sm">
                     Price: <strong>${item.price}</strong>
                   </p>
-
-                  <div className="mt-2 text-sm">
-                    <p>
-                      <strong>Entrees:</strong>{" "}
-                      {(item.selections?.entrees || []).join(", ")}
-                    </p>
-                    <p>
-                      <strong>Mains:</strong>{" "}
-                      {(item.selections?.mains || []).join(", ")}
-                    </p>
-                    <p>
-                      <strong>Desserts:</strong>{" "}
-                      {(item.selections?.desserts || []).join(", ")}
-                    </p>
-
-                    {item.specialRequest && (
-                      <p className="mt-2 text-sm text-blue-700">
-                        <strong>Special Request:</strong>{" "}
-                        {item.specialRequest}
-                      </p>
-                    )}
-                  </div>
                 </div>
               ))}
             </div>

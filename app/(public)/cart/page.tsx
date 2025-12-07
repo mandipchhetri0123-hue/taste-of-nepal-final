@@ -96,7 +96,7 @@ export default function CartPage() {
 
       <div className="max-w-4xl mx-auto mt-8 flex items-center justify-between">
         <p className="text-xl font-bold">
-          Total: ${grandTotal.toFixed(2)} (simulated payment)
+          Total: ${grandTotal.toFixed(2)} (Stripe payment)
         </p>
         <button
           onClick={() => router.push('/checkout')}
