@@ -63,8 +63,8 @@ export default function MenuPage() {
     { item: MenuItem; qty: number; note: string }[]
   >([]);
 
-  // All food items cost $1/person for manual/single orders
-  const FIXED_PRICE = 1;
+  // All food items cost $5/person for manual/single orders
+  const FIXED_PRICE = 5;
 
   // =========================
   // LOAD PACKAGES
