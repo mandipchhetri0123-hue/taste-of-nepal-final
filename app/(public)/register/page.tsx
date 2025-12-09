@@ -109,7 +109,7 @@ export default function RegisterPage() {
       });
 
       setMessage(
-        "A verification email has been sent. Please open your inbox and confirm 'Yes, it's me' to activate your account."
+        "A verification email has been sent. Please open your inbox and confirm to activate your account."
       );
     } catch (err: any) {
       console.error(err);
