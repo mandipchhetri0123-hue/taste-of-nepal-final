@@ -89,9 +89,10 @@ export default function RegisterPage() {
 
       // SEND VERIFICATION EMAIL
       await sendEmailVerification(user, {
-        url: "https://tasteofnepal.xyz/verify-email",
-        handleCodeInApp: true,
-      });
+  url: "https://taste-of-nepal-3af40.firebaseapp.com/__/auth/action",
+  handleCodeInApp: true,
+});
+
 
       // STORE IN pendingUsers
       await setDoc(doc(db, "pendingUsers", user.uid), {
