@@ -66,7 +66,7 @@ export default function RegisterPage() {
 
     if (!strongPassword.test(form.password))
       return setError(
-        "Password must have 1 uppercase, 1 number, 1 symbol, and be at least 8 characters."
+        "Password must contain 1 uppercase, 1 number, 1 symbol, and 8+ characters."
       );
 
     if (form.password !== form.confirmPassword)
@@ -75,12 +75,10 @@ export default function RegisterPage() {
     if (!form.agree)
       return setError("You must agree to the Terms & Conditions.");
 
-    // ============================
-    // CREATE USER WITH EMAIL VERIFY
-    // ============================
     try {
       setLoading(true);
 
+      // CREATE TEMP USER
       const userCred = await createUserWithEmailAndPassword(
         auth,
         form.email.trim(),
@@ -89,14 +87,13 @@ export default function RegisterPage() {
 
       const user = userCred.user;
 
-      // Send professional email verification
+      // SEND VERIFICATION EMAIL
       await sendEmailVerification(user, {
-  url: "https://tasteofnepal.xyz/verify-email",
-  handleCodeInApp: true,
-});
+        url: "https://tasteofnepal.xyz/verify-email",
+        handleCodeInApp: true,
+      });
 
-
-      // Save TEMP user to pendingUsers until verification
+      // STORE IN pendingUsers
       await setDoc(doc(db, "pendingUsers", user.uid), {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
@@ -109,11 +106,15 @@ export default function RegisterPage() {
       });
 
       setMessage(
-        "A verification email has been sent. Please open your inbox and confirm to activate your account."
+        "A verification email has been sent. Please check your inbox and click the confirmation link."
       );
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "Failed to create account.");
+      if (err.code === "auth/email-already-in-use") {
+        setError("This email is already registered.");
+      } else {
+        setError("Failed to create account. Please try again.");
+      }
     }
 
     setLoading(false);
@@ -122,14 +123,12 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-
         <h1 className="text-3xl font-bold mb-4 text-center">Create Account</h1>
 
         {error && <p className="text-red-500 text-center mb-4">{error}</p>}
         {message && <p className="text-green-600 text-center mb-4">{message}</p>}
 
         <form onSubmit={handleRegister} className="space-y-4">
-
           <div className="grid grid-cols-2 gap-3">
             <input
               className="border p-2 rounded"
